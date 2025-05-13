@@ -4,4 +4,4 @@ __pycache__/
 .env
 .chainlit/
 .files/
-.vscode/
+.vscode/qdrant_local_db/
