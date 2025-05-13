@@ -1,22 +1,20 @@
 import asyncio
-from typing import List
+from typing import List, Dict, Any
 import chainlit as cl
 import json
 import os
 
 from dotenv import load_dotenv
-from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai import ChatOpenAI
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_core.documents import Document
-
+from langchain_core.language_models import BaseChatModel
+from langchain_core.runnables import Runnable
 from langchain_qdrant import QdrantVectorStore
-from pstuts_rag.rag import RAGChainFactory, RetrieverFactory
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import Distance, VectorParams
 from dataclasses import dataclass
 
-import pstuts_rag.rag
+import pstuts_rag.rag, pstuts_rag.datastore
 
 
 @dataclass
@@ -37,10 +35,12 @@ def set_api_key_if_not_present(key_name, prompt_message=""):
 class ApplicationState:
     embeddings: OpenAIEmbeddings = None
     docs: List[Document] = []
-    qdrantclient: QdrantClient = None
-    vectorstore: QdrantVectorStore = None
-    retriever_factory: pstuts_rag.rag.RetrieverFactory
+    qdrant_client: QdrantClient = None
+    vector_store: QdrantVectorStore = None
+    datastore_manager: pstuts_rag.datastore.DatastoreManager
     rag_factory: pstuts_rag.rag.RAGChainFactory
+    llm: BaseChatModel
+    rag_chain: Runnable
 
     def __init__(self) -> None:
         load_dotenv()
@@ -51,30 +51,39 @@ state = ApplicationState()
 params = ApplicationParameters()
 
 
-@cl.on_chat_start
-async def on_chat_start():
-    state.client = QdrantClient(":memory:")
-
-    state.retriever_factory = pstuts_rag.rag.RetrieverFactory(
-        qdrant_client=state.client, name="local_test"
-    )
-    if state.retriever_factory.count_docs() == 0:
+async def fill_the_db():
+    if state.datastore_manager.count_docs() == 0:
         data: List[Dict[str, Any]] = json.load(open(params.filename, "rb"))
-        asyncio.run(main=state.retriever_factory.aadd_docs(raw_docs=data))
+        await state.datastore_manager.populate_database(raw_docs=data)
+
+
+async def build_the_chain():
     state.rag_factory = pstuts_rag.rag.RAGChainFactory(
-        retriever=state.retriever_factory.get_retriever()
+        retriever=state.datastore_manager.get_retriever()
     )
     state.llm = ChatOpenAI(model=params.llm_model, temperature=0)
     state.rag_chain = state.rag_factory.get_rag_chain(state.llm)
+    pass
+
+
+@cl.on_chat_start
+async def on_chat_start():
+    state.qdrant_client = QdrantClient(":memory:")
+
+    state.datastore_manager = pstuts_rag.datastore.DatastoreManager(
+        qdrant_client=state.qdrant_client, name="local_test"
+    )
+    asyncio.run(main=fill_the_db())
+    asyncio.run(main=build_the_chain())
 
 
 @cl.on_message
 async def main(message: cl.Message):
     # Send a response back to the user
 
-    v = await state.rag_chain.ainvoke(message.content)
+    response = await state.rag_chain.ainvoke({"question": message.content})
 
-    await cl.Message(content=v.content).send()
+    await cl.Message(content=response.content).send()
 
 
 if __name__ == "__main__":
