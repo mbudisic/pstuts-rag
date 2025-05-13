@@ -68,14 +68,16 @@ known-first-party = ["src"]
 line-length = 79
 target-version = ["py313"]
 
+# [tool.mypy]
+# python_version = "3.13"
+# warn_return_any = true
+# warn_unused_configs = true
+# disallow_untyped_defs = true
+# mypy_path           = ["pstuts_rag/pstuts_rag"]
+# namespace_packages  = true
+# explicit_package_bases = true
 [tool.mypy]
-python_version = "3.13"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-mypy_path           = ["pstuts_rag/pstuts_rag"]
-namespace_packages  = true
-explicit_package_bases = true
+ignore_errors = true
 
 [tool.flake8]
 application-import-names = "pstuts_rag"

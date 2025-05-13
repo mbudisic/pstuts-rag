@@ -1,4 +1,6 @@
+import asyncio
 from typing import List, Dict, Iterator, Any
+import uuid
 
 
 from langchain_experimental.text_splitter import SemanticChunker
@@ -7,14 +9,22 @@ from langchain_core.documents import Document
 
 from .loader import VideoTranscriptBulkLoader, VideoTranscriptLoader
 
+from langchain_core.vectorstores import VectorStoreRetriever
+
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
+from qdrant_client.models import VectorParams, Distance, PointStruct
 
 
-def transcripts_load(
+def batch(iterable: List[Any], size: int = 16) -> Iterator[List[Any]]:
+    for i in range(0, len(iterable), size):
+        yield iterable[i : i + size]
+
+
+async def chunk_transcripts(
     json_transcripts: List[Dict[str, Any]],
-    embeddings: OpenAIEmbeddings = OpenAIEmbeddings(
+    semantic_chunker_embedding_model: OpenAIEmbeddings = OpenAIEmbeddings(
         model="text-embedding-3-small"
     ),
 ) -> List[Document]:
@@ -40,12 +50,21 @@ def transcripts_load(
         json_payload=json_transcripts
     ).load()
 
-    text_splitter = SemanticChunker(embeddings)
-
-    docs_chunks_semantic: List[Document] = text_splitter.split_documents(
-        docs_full_transcript
+    # semantically split the combined transcript
+    text_splitter = SemanticChunker(semantic_chunker_embedding_model)
+    docs_group = await asyncio.gather(
+        *[
+            text_splitter.atransform_documents(d)
+            for d in batch(docs_full_transcript, size=2)
+        ]
     )
+    # Flatten the nested list of documents
+    docs_chunks_semantic: List[Document] = []
+    for group in docs_group:
+        docs_chunks_semantic.extend(group)
 
+    # locate individual sections of the original transcript
+    # with the semantic chunks
     def is_subchunk(a: Document, ofb: Document) -> bool:
         return (a.metadata["video_id"] == ofb.metadata["video_id"]) and (
             a.page_content in ofb.page_content
@@ -83,35 +102,129 @@ def transcripts_load(
         else:
             chunk.metadata["start"], chunk.metadata["stop"] = None, None
 
+    docs_chunks_semantic[0].metadata.keys()
     return docs_chunks_semantic
 
 
-def initialize_vectorstore(
-    client: QdrantClient, collection_name: str, embeddings: OpenAIEmbeddings
-) -> QdrantVectorStore:
+class DatastoreManager:
+    """Factory class for creating and managing vector store retrievers.
+
+    This class simplifies the process of creating, populating, and managing
+    Qdrant vector stores for document retrieval.
+
+    Attributes:
+        embeddings: OpenAI embeddings model for document vectorization
+        docs: List of documents stored in the vector store
+        qdrant_client: Client for Qdrant vector database
+        name: Unique identifier for this retriever instance
+        vector_store: The Qdrant vector store instance
     """
-    Initialize a Qdrant vector store with the given client and collection name.
 
-    This function creates a new collection in Qdrant and initializes a vector
-    store with the specified embeddings model. The collection is configured
-    with appropriate vector parameters for the embedding model.
+    embeddings: OpenAIEmbeddings
+    docs: List[Document]
+    qdrant_client: QdrantClient
+    name: str
+    vector_store: QdrantVectorStore
 
-    Args:
-        client: QdrantClient instance to use for connecting to the database
-        collection_name: Name to use for the new collection
-        embeddings: OpenAI embeddings model to use for vector encoding
+    def __init__(
+        self,
+        embeddings: OpenAIEmbeddings = OpenAIEmbeddings(
+            model="text-embedding-3-small"
+        ),
+        qdrant_client: QdrantClient = QdrantClient(location=":memory:"),
+        name: str = str(object=uuid.uuid4()),
+    ) -> None:
+        """Initialize the RetrieverFactory.
 
-    Returns:
-        Initialized QdrantVectorStore instance ready for document storage
-    """
-    client.create_collection(
-        collection_name=collection_name,
-        vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
-    )
+        Args:
+            embeddings: OpenAI embeddings model to use
+            qdrant_client: Qdrant client for vector database operations
+            name: Unique identifier for this retriever instance
+        """
+        self.embeddings = embeddings
+        self.name = name
+        self.qdrant_client = qdrant_client
 
-    vector_store = QdrantVectorStore(
-        client=client,
-        collection_name=collection_name,
-        embedding=embeddings,
-    )
-    return vector_store
+        self.qdrant_client.recreate_collection(
+            collection_name=self.name,
+            vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+        )
+
+        # wrapper around the client
+        self.vector_store = QdrantVectorStore(
+            client=self.qdrant_client,
+            collection_name=self.name,
+            embedding=embeddings,
+        )
+
+        self.docs = []
+
+    async def populate_database(self, raw_docs: List[Dict[str, Any]]):
+
+        # perform chunking
+        self.docs: List[Document] = await chunk_transcripts(
+            json_transcripts=raw_docs,
+            semantic_chunker_embedding_model=self.embeddings,
+        )
+
+        # perform embedding
+
+        vector_batches = await asyncio.gather(
+            *[
+                self.embeddings.aembed_documents(
+                    [c.page_content for c in chunk_batch]
+                )
+                for chunk_batch in batch(self.docs, 8)
+            ]
+        )
+        vectors = []
+        for vb in vector_batches:
+            vectors.extend(vb)
+        ids = list(range(len(vectors)))
+
+        points = [
+            PointStruct(
+                id=id,
+                vector=vector,
+                payload={
+                    "page_content": doc.page_content,
+                    "metadata": doc.metadata,
+                },
+            )
+            for id, vector, doc in zip(ids, vectors, self.docs)
+        ]
+
+        # upload qdrant payload
+        self.qdrant_client.upload_points(
+            collection_name=self.name,
+            points=points,
+        )
+
+    def count_docs(self) -> int:
+        try:
+            count = self.qdrant_client.get_collection(self.name).points_count
+            return count if count else 0
+        except ValueError:
+            return 0
+
+    def clear(self) -> bool:
+        """Clear all documents from the vector store.
+
+        Returns:
+            bool: True if deletion was successful, False otherwise
+        """
+        self.docs = []
+        return True if self.vector_store.delete() else False
+
+    def get_retriever(self, n_context_docs: int = 2) -> VectorStoreRetriever:
+        """Get a retriever for the vector store.
+
+        Args:
+            n_context_docs: Number of documents to retrieve for each query
+
+        Returns:
+            VectorStoreRetriever: The configured retriever
+        """
+        return self.vector_store.as_retriever(
+            search_kwargs={"k": n_context_docs}
+        )

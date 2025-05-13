@@ -6,6 +6,7 @@ This module provides the core RAG functionality, including:
 """
 
 import json
+from multiprocessing import Value
 import uuid
 from operator import itemgetter
 from typing import Dict, List, Any
@@ -25,94 +26,10 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_openai import ChatOpenAI
 
-from .datastore import initialize_vectorstore, transcripts_load
 from .prompt_templates import RAG_PROMPT_TEMPLATES
 
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages import AIMessage
-
-
-class RetrieverFactory:
-    """Factory class for creating and managing vector store retrievers.
-
-    This class simplifies the process of creating, populating, and managing
-    Qdrant vector stores for document retrieval.
-
-    Attributes:
-        embeddings: OpenAI embeddings model for document vectorization
-        docs: List of documents stored in the vector store
-        qdrant_client: Client for Qdrant vector database
-        name: Unique identifier for this retriever instance
-        vector_store: The Qdrant vector store instance
-    """
-
-    embeddings: OpenAIEmbeddings
-    docs: List[Document]
-    qdrant_client: QdrantClient
-    name: str
-    vector_store: QdrantVectorStore
-
-    def __init__(
-        self,
-        embeddings: OpenAIEmbeddings = OpenAIEmbeddings(
-            model="text-embedding-3-small"
-        ),
-        qdrant_client: QdrantClient = QdrantClient(location=":memory:"),
-        name: str = str(object=uuid.uuid4()),
-    ) -> None:
-        """Initialize the RetrieverFactory.
-
-        Args:
-            embeddings: OpenAI embeddings model to use
-            qdrant_client: Qdrant client for vector database operations
-            name: Unique identifier for this retriever instance
-        """
-        self.embeddings = embeddings
-        self.name = name
-        self.qdrant_client = qdrant_client
-        self.vector_store = initialize_vectorstore(
-            client=self.qdrant_client,
-            collection_name=f"{self.name}_qdrant",
-            embeddings=self.embeddings,
-        )
-        self.docs = []
-
-    def add_docs(self, raw_docs: List[Dict[str, Any]]) -> None:
-        """Add documents to the vector store.
-
-        Takes raw document data, converts it to Document objects,
-        and adds them to the vector store.
-
-        Args:
-            raw_docs: List of raw document dictionaries
-        """
-        docs: List[Document] = transcripts_load(
-            json_transcripts=raw_docs, embeddings=self.embeddings
-        )
-        self.docs.extend(docs)
-        _ = self.vector_store.add_documents(documents=docs)
-
-    def clear(self) -> bool:
-        """Clear all documents from the vector store.
-
-        Returns:
-            bool: True if deletion was successful, False otherwise
-        """
-        self.docs = []
-        return True if self.vector_store.delete() else False
-
-    def get_retriever(self, n_context_docs: int = 2) -> VectorStoreRetriever:
-        """Get a retriever for the vector store.
-
-        Args:
-            n_context_docs: Number of documents to retrieve for each query
-
-        Returns:
-            VectorStoreRetriever: The configured retriever
-        """
-        return self.vector_store.as_retriever(
-            search_kwargs={"k": n_context_docs}
-        )
 
 
 class RAGChainFactory:
