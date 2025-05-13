@@ -1,9 +1,9 @@
 import json
 import uuid
 from operator import itemgetter
-from typing import List, Optional, Union
+from typing import Dict, List, Any
+from typing import List, Dict, Any
 
-from langchain.schema.output_parser import StrOutputParser
 from langchain_core.documents import Document
 from langchain_core.runnables import (
     Runnable,
@@ -53,7 +53,7 @@ class RetrieverFactory:
         )
         self.docs = []
 
-    def add_docs(self, raw_docs) -> None:
+    def add_docs(self, raw_docs: List[Dict[str, Any]]) -> None:
 
         docs: List[Document] = transcripts_load(
             json_transcripts=raw_docs, embeddings=self.embeddings
@@ -90,19 +90,8 @@ class RAGChainFactory:
         ]
         return json.dumps(references, indent=2)
 
-    pack_references: RunnableLambda = RunnableLambda(
-        lambda d: {
-            **d["input"],
-            "answer": d["answer"]
-            + "\nReferences:\n"
-            + RAGChainFactory.compile_references(
-                context=d["input"]["context"]
-            ),
-        }
-    )
-
     @staticmethod
-    def pack_references2(msg_dict: Dict[str, Any]) -> AIMessage:
+    def pack_references(msg_dict: Dict[str, Any]) -> AIMessage:
 
         answer: AIMessage = msg_dict["answer"]
         input = msg_dict["input"]
@@ -154,7 +143,7 @@ class RAGChainFactory:
             self.format_query
             | self.prepare_query
             | {"input": RunnablePassthrough(), "answer": self.answer_chain}
-            | self.pack_references2
+            | self.pack_references
         )
 
         return self.rag_chain

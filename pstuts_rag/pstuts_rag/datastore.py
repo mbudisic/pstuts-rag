@@ -1,12 +1,11 @@
-from typing import List, Dict, Iterator
-import functools
+from typing import List, Dict, Iterator, Any
 
 
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_core.documents import Document
 
-from pstuts_rag.loader import VideoTranscriptBulkLoader, VideoTranscriptLoader
+from .loader import VideoTranscriptBulkLoader, VideoTranscriptLoader
 
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
@@ -14,8 +13,10 @@ from qdrant_client.http.models import Distance, VectorParams
 
 
 def transcripts_load(
-    json_transcripts: List[Dict],
-    embeddings: OpenAIEmbeddings = OpenAIEmbeddings(model="text-embedding-3-small"),
+    json_transcripts: List[Dict[str, Any]],
+    embeddings: OpenAIEmbeddings = OpenAIEmbeddings(
+        model="text-embedding-3-small"
+    ),
 ) -> List[Document]:
     """
     Load and process video transcripts into semantically chunked documents.
@@ -32,8 +33,12 @@ def transcripts_load(
         List of semantically chunked Document objects with enhanced metadata
     """
 
-    docs_full_transcript = VideoTranscriptBulkLoader(json_transcripts).load()
-    docs_chunks_verbatim = VideoTranscriptLoader(json_transcripts).load()
+    docs_full_transcript: List[Document] = VideoTranscriptBulkLoader(
+        json_payload=json_transcripts
+    ).load()
+    docs_chunks_verbatim: List[Document] = VideoTranscriptLoader(
+        json_payload=json_transcripts
+    ).load()
 
     text_splitter = SemanticChunker(embeddings)
 
@@ -47,9 +52,9 @@ def transcripts_load(
         )
 
     # Create a lookup dictionary for faster access
-    video_id_to_chunks = {}
+    video_id_to_chunks: Dict[int, List[Document]] = {}
     for chunk in docs_chunks_verbatim:
-        video_id = chunk.metadata["video_id"]
+        video_id: int = chunk.metadata["video_id"]
         if video_id not in video_id_to_chunks:
             video_id_to_chunks[video_id] = []
         video_id_to_chunks[video_id].append(chunk)
@@ -59,14 +64,22 @@ def transcripts_load(
         # Only check chunks from the same video
         potential_subchunks = video_id_to_chunks.get(video_id, [])
         subchunks = [
-            c for c in potential_subchunks if c.page_content in chunk.page_content
+            c
+            for c in potential_subchunks
+            if c.page_content in chunk.page_content
         ]
 
-        times = [(t.metadata["time_start"], t.metadata["time_end"]) for t in subchunks]
+        times = [
+            (t.metadata["time_start"], t.metadata["time_end"])
+            for t in subchunks
+        ]
         chunk.metadata["speech_start_stop_times"] = times
 
         if times:  # Avoid IndexError if times is empty
-            chunk.metadata["start"], chunk.metadata["stop"] = times[0][0], times[-1][-1]
+            chunk.metadata["start"], chunk.metadata["stop"] = (
+                times[0][0],
+                times[-1][-1],
+            )
         else:
             chunk.metadata["start"], chunk.metadata["stop"] = None, None
 
