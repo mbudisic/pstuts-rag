@@ -18,6 +18,7 @@ import pstuts_rag.datastore
 class ApplicationParameters:
     filename = "data/test.json"
     embedding_model = "text-embedding-3-small"
+    n_context_docs = 2
 
 
 class ApplicationState:
@@ -25,7 +26,6 @@ class ApplicationState:
     docs: List[Document] = []
     qdrantclient: QdrantClient = None
     vectorstore: QdrantVectorStore = None
-    n_context_docs = 2
     retriever = None
 
 
@@ -55,15 +55,19 @@ async def on_chat_start():
 
     _ = state.vectorstore.add_documents(documents=state.docs)
     state.retriever = state.vectorstore.as_retriever(
-        search_kwargs={"k": state.n_context_docs}
+        search_kwargs={"k": params.n_context_docs}
     )
+
+    await cl.Message(content=f"Populated vector database.").send()
 
 
 @cl.on_message
 async def main(message: cl.Message):
     # Send a response back to the user
 
-    await cl.Message(content=f"Hello! You said: {message.content}").send()
+    v = await state.retriever.ainvoke(message.content)
+
+    await cl.Message(content=f"Hello! {len(v)}").send()
 
 
 if __name__ == "__main__":
