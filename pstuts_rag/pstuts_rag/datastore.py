@@ -89,6 +89,21 @@ def transcripts_load(
 def initialize_vectorstore(
     client: QdrantClient, collection_name: str, embeddings: OpenAIEmbeddings
 ) -> QdrantVectorStore:
+    """
+    Initialize a Qdrant vector store with the given client and collection name.
+
+    This function creates a new collection in Qdrant and initializes a vector
+    store with the specified embeddings model. The collection is configured
+    with appropriate vector parameters for the embedding model.
+
+    Args:
+        client: QdrantClient instance to use for connecting to the database
+        collection_name: Name to use for the new collection
+        embeddings: OpenAI embeddings model to use for vector encoding
+
+    Returns:
+        Initialized QdrantVectorStore instance ready for document storage
+    """
     client.create_collection(
         collection_name=collection_name,
         vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
