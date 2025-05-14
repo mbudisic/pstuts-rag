@@ -1,3 +1,8 @@
 {
-    "python.pythonPath": "/home/mbudisic/Documents/PsTuts-RAG/.venv/bin/python"
+    "python.pythonPath": "/home/mbudisic/Documents/PsTuts-RAG/.venv/bin/python",
+    "cSpell.words": [
+        "chainlit",
+        "pstuts",
+        "qdrant"
+    ]
 }

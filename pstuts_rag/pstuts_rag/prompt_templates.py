@@ -51,3 +51,13 @@ NEVER invent the explanation. ALWAYS use ONLY the context information.
 """,
     )
 )
+SUPERVISOR_SYSTEM = """Given the conversation above, who should act next? Or should we FINISH?
+If the last answer was 'I don't know', do not FINISH.
+Select one of: {options}"""
+
+AGENT_SYSTEM = """Work autonomously according to your specialty, using the tools available to you.
+Do not ask for clarification.
+Your other team members (and other teams) will collaborate with you with their own specialties.
+
+You are chosen for a reason! You are one of the following team members: {team_members}.
+"""

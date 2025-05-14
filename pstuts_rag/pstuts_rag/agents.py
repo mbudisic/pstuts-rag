@@ -10,9 +10,14 @@ from langchain_openai import ChatOpenAI
 from langchain_core.language_models import BaseChatModel
 
 from langgraph.graph import END, StateGraph
+import pstuts_rag.prompt_templates
 
 
 def agent_node(state, agent, name):
+    """agent_node calls the invoke function of the agent Runnable"""
+    # Initialize team_members if it's not already in the state
+    if "team_members" not in state:
+        state["team_members"] = []
     result = agent.invoke(state)
     return {"messages": [HumanMessage(content=result["output"], name=name)]}
 
@@ -23,16 +28,7 @@ def create_agent(
     system_prompt: str,
 ):
     """Create a function-calling agent and add it to the graph."""
-    system_prompt += """
-Work autonomously according to your specialty, using the tools available to you.
-Do not ask for clarification.
-Your other team members (and other teams) will collaborate with you with their own specialties.
-Your first choice should be to use your vector store RAG as the primary source of information. 
-If that does not provide enough context, then use the ArXiv search engine as the first attempt,
-and if that does not provide enough context, then use the Tavily search engine as the second attempt.
-
-You are chosen for a reason! You are one of the following team members: {team_members}.
-"""
+    system_prompt += pstuts_rag.prompt_templates.AGENT_SYSTEM
     prompt = ChatPromptTemplate.from_messages(
         [
             (
@@ -48,7 +44,7 @@ You are chosen for a reason! You are one of the following team members: {team_me
     return executor
 
 
-def create_team_supervisor(llm: ChatOpenAI, system_prompt, members) -> str:
+def create_team_supervisor(llm: ChatOpenAI, system_prompt, members):
     """An LLM-based router."""
     options = ["FINISH"] + members
     function_def = {
@@ -72,12 +68,7 @@ def create_team_supervisor(llm: ChatOpenAI, system_prompt, members) -> str:
         [
             ("system", system_prompt),
             MessagesPlaceholder(variable_name="messages"),
-            (
-                "system",
-                "Given the conversation above, who should act next? Or should we FINISH?"
-                "If the last answer was 'I don't know', do not FINISH."
-                " Select one of: {options}",
-            ),
+            ("system", pstuts_rag.prompt_templates.SUPERVISOR_SYSTEM),
         ]
     ).partial(options=str(options), team_members=", ".join(members))
     return (
