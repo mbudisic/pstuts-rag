@@ -7,9 +7,10 @@ This module provides the core RAG functionality, including:
 
 import json
 from multiprocessing import Value
+import re
 import uuid
 from operator import itemgetter
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 
 from langchain_core.documents import Document
 from langchain_core.runnables import (
@@ -97,7 +98,7 @@ class RAGChainFactory:
         )
 
         text_w_references = "\n".join(
-            [answer.content, "**References**:", references]
+            [answer.content, "**REFERENCES**", references]
         )
 
         output: AIMessage = answer.model_copy(
@@ -112,6 +113,20 @@ class RAGChainFactory:
         )
 
         return output
+
+    @staticmethod
+    def unpack_references(content: str) -> Tuple[str, str]:
+        parts = re.split(r"\*\*REFERENCES\*\*\s*", content, maxsplit=1)
+
+        if len(parts) == 2:
+            text = parts[0].rstrip()
+            references = parts[1].lstrip()
+            return text, references
+
+        else:
+            raise ValueError(
+                f"No '**References:**' section found in input:\n{content}"
+            )
 
     def __init__(
         self,

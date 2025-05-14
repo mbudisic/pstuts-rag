@@ -11,6 +11,7 @@ from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import Runnable
 from langchain_qdrant import QdrantVectorStore
+from pstuts_rag.loader import load_json_files, load_single_json
 from qdrant_client import QdrantClient
 from dataclasses import dataclass
 
@@ -19,7 +20,7 @@ import pstuts_rag.rag, pstuts_rag.datastore
 
 @dataclass
 class ApplicationParameters:
-    filename = "data/test.json"
+    filename = [f"data/{f}.json" for f in ["dev"]]
     embedding_model = "text-embedding-3-small"
     n_context_docs = 2
     llm_model = "gpt-4.1-mini"
@@ -42,6 +43,9 @@ class ApplicationState:
     llm: BaseChatModel
     rag_chain: Runnable
 
+    hasLoaded: asyncio.Event = asyncio.Event()
+    pointsLoaded: int = 0
+
     def __init__(self) -> None:
         load_dotenv()
         set_api_key_if_not_present("OPENAI_API_KEY")
@@ -53,8 +57,13 @@ params = ApplicationParameters()
 
 async def fill_the_db():
     if state.datastore_manager.count_docs() == 0:
-        data: List[Dict[str, Any]] = json.load(open(params.filename, "rb"))
-        await state.datastore_manager.populate_database(raw_docs=data)
+        data: List[Dict[str, Any]] = await load_json_files(params.filename)
+        state.pointsLoaded = await state.datastore_manager.populate_database(
+            raw_docs=data
+        )
+        await cl.Message(
+            content=f"✅ The database has been loaded with {state.pointsLoaded} elements!"
+        ).send()
 
 
 async def build_the_chain():
@@ -80,10 +89,36 @@ async def on_chat_start():
 @cl.on_message
 async def main(message: cl.Message):
     # Send a response back to the user
-
+    msg = cl.Message(content="")
     response = await state.rag_chain.ainvoke({"question": message.content})
 
-    await cl.Message(content=response.content).send()
+    text, references = pstuts_rag.rag.RAGChainFactory.unpack_references(
+        response.content
+    )
+    if isinstance(text, str):
+        for token in [char for char in text]:
+            await msg.stream_token(token)
+
+    await msg.send()
+
+    references = json.loads(references)
+    print(references)
+
+    msg_references = [
+        (
+            f"Watch {ref["title"]} from timestamp "
+            f"{round(ref["start"] // 60)}m:{round(ref["start"] % 60)}s",
+            cl.Video(
+                name=ref["title"],
+                url=f"{ref["source"]}#t={ref["start"]}",
+                display="side",
+            ),
+        )
+        for ref in references
+    ]
+    await cl.Message(content="Related videos").send()
+    for e in msg_references:
+        await cl.Message(content=e[0], elements=[e[1]]).send()
 
 
 if __name__ == "__main__":

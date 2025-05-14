@@ -159,7 +159,7 @@ class DatastoreManager:
 
         self.docs = []
 
-    async def populate_database(self, raw_docs: List[Dict[str, Any]]):
+    async def populate_database(self, raw_docs: List[Dict[str, Any]]) -> int:
 
         # perform chunking
         self.docs: List[Document] = await chunk_transcripts(
@@ -199,6 +199,8 @@ class DatastoreManager:
             collection_name=self.name,
             points=points,
         )
+
+        return len(points)
 
     def count_docs(self) -> int:
         try:

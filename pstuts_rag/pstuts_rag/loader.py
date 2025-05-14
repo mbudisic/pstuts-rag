@@ -1,6 +1,33 @@
+import glob
+import json
 from langchain_core.document_loaders import BaseLoader
 from typing import List, Dict, Iterator
 from langchain_core.documents import Document
+
+import aiofiles
+import asyncio
+from pathlib import Path
+
+
+async def load_single_json(filepath):
+    my_path = Path(filepath)
+
+    async with aiofiles.open(my_path, mode="r", encoding="utf-8") as f:
+        content = await f.read()
+        payload: List[Dict] = json.loads(content)
+        [video.update({"group": my_path.name}) for video in payload]
+
+    return payload
+
+
+async def load_json_files(path_pattern: List[str]):
+    files = []
+    for f in path_pattern:
+        (files.extend(glob.glob(f, recursive=True)))
+
+    tasks = [load_single_json(f) for f in files]
+    results = await asyncio.gather(*tasks)
+    return [item for sublist in results for item in sublist]  # flatten
 
 
 class VideoTranscriptBulkLoader(BaseLoader):
@@ -21,7 +48,9 @@ class VideoTranscriptBulkLoader(BaseLoader):
             if "url" in metadata:
                 metadata["source"] = metadata.pop("url")
             yield Document(
-                page_content="\n".join(t["sent"] for t in video["transcripts"]),
+                page_content="\n".join(
+                    t["sent"] for t in video["transcripts"]
+                ),
                 metadata=metadata,
             )
 
