@@ -6,31 +6,24 @@ This module provides the core RAG functionality, including:
 """
 
 import json
-from multiprocessing import Value
 import re
-import uuid
-from operator import itemgetter
-from typing import Dict, List, Any, Tuple
 
+from operator import itemgetter
+from typing import Any, Dict, List, Tuple
+
+from langchain.prompts import ChatPromptTemplate
 from langchain_core.documents import Document
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage
 from langchain_core.runnables import (
     Runnable,
     RunnableLambda,
     RunnablePassthrough,
 )
-
-from langchain_openai.embeddings import OpenAIEmbeddings
-from langchain_qdrant import QdrantVectorStore
-from qdrant_client import QdrantClient
-
-from langchain.prompts import ChatPromptTemplate
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_openai import ChatOpenAI
 
 from .prompt_templates import RAG_PROMPT_TEMPLATES
-
-from langchain_core.language_models.base import BaseLanguageModel
-from langchain_core.messages import AIMessage
 
 
 class RAGChainFactory:
@@ -150,9 +143,7 @@ class RAGChainFactory:
 
     def get_rag_chain(
         self,
-        llm: BaseLanguageModel = ChatOpenAI(
-            model="gpt-4.1-mini", temperature=0
-        ),
+        llm: BaseChatModel = ChatOpenAI(model="gpt-4.1-mini", temperature=0),
     ) -> Runnable:
         """Build and return the complete RAG chain.
 

@@ -1,21 +1,22 @@
 import asyncio
-from typing import List, Dict, Any
-import chainlit as cl
 import json
 import os
+from dataclasses import dataclass
+from typing import Any, Dict, List
 
+import chainlit as cl
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
-from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import Runnable
+from langchain_openai import ChatOpenAI
+from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
-from pstuts_rag.loader import load_json_files, load_single_json
 from qdrant_client import QdrantClient
-from dataclasses import dataclass
 
-import pstuts_rag.rag, pstuts_rag.datastore
+import pstuts_rag.datastore
+import pstuts_rag.rag
+from pstuts_rag.loader import load_json_files
 
 
 @dataclass
