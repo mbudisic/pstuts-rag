@@ -90,9 +90,11 @@ class RAGChainFactory:
             context=input["context"]
         )
 
-        text_w_references = "\n".join(
-            [answer.content, "**REFERENCES**", references]
-        )
+        text_w_references = answer.content
+        if "I don't know" not in answer.content:
+            text_w_references = "\n".join(
+                [str(text_w_references), "**REFERENCES**", references]
+            )
 
         output: AIMessage = answer.model_copy(
             update={
@@ -138,8 +140,10 @@ class RAGChainFactory:
         }
 
         self.prompt_template = ChatPromptTemplate.from_messages(
-            RAG_PROMPT_TEMPLATES
+            list(RAG_PROMPT_TEMPLATES.items())
         )
+
+        print(repr)
 
     def get_rag_chain(
         self,

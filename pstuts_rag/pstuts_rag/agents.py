@@ -1,5 +1,5 @@
-from typing import Any, Callable, List, Optional, TypedDict, Union
-
+from typing import Any, Callable, List, Optional, TypedDict, Union, Annotated
+import operator
 from langchain.agents import AgentExecutor, create_openai_functions_agent
 from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -13,13 +13,19 @@ from langgraph.graph import END, StateGraph
 import pstuts_rag.prompt_templates
 
 
-def agent_node(state, agent, name):
+class PsTutsTeamState(TypedDict):
+    messages: Annotated[List[BaseMessage], operator.add]
+    team_members: List[str]
+    next: str
+
+
+def agent_node(state, agent, name, outputfield: str = "output"):
     """agent_node calls the invoke function of the agent Runnable"""
     # Initialize team_members if it's not already in the state
     if "team_members" not in state:
         state["team_members"] = []
     result = agent.invoke(state)
-    return {"messages": [HumanMessage(content=result["output"], name=name)]}
+    return {"messages": [HumanMessage(content=result[outputfield], name=name)]}
 
 
 def create_agent(
@@ -31,10 +37,7 @@ def create_agent(
     system_prompt += pstuts_rag.prompt_templates.AGENT_SYSTEM
     prompt = ChatPromptTemplate.from_messages(
         [
-            (
-                "system",
-                system_prompt,
-            ),
+            ("system", system_prompt),
             MessagesPlaceholder(variable_name="messages"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
         ]
