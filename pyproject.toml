@@ -92,3 +92,8 @@ extension-pkg-allow-list = "numpy, torch"  # compiled deps that astroid cannot p
 
 [tool.pylint.TYPECHECK]
 ignored-modules   = "pkg_resources"        # suppress noisy vendored imports
+
+[dependency-groups]
+dev = [
+    "ipdb>=0.13.13",
+]

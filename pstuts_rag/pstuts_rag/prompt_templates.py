@@ -67,9 +67,6 @@ for Adobe Photoshop help topics using the tavily search engine.
 Users may provide you with partial questions - try your best to determine their intent.
 
 If Tavily provides no references, respond with "I don't know".
-
-IMPORTANT: Include ALL urls from all references Tavily provides. 
-Separate them from the rest of the text using a line containing "**URL**"
 """
 
 SUPERVISOR_SYSTEM = """You are the Supervisor for an agentic RAG system. Your job is to 

@@ -19,13 +19,18 @@ class PsTutsTeamState(TypedDict):
     next: str
 
 
-def agent_node(state, agent, name, outputfield: str = "output"):
+def agent_node(
+    state: PsTutsTeamState,
+    agent: Runnable,
+    name: str,
+    output_field: str = "output",
+):
     """agent_node calls the invoke function of the agent Runnable"""
     # Initialize team_members if it's not already in the state
     if "team_members" not in state:
         state["team_members"] = []
     result = agent.invoke(state)
-    return {"messages": [HumanMessage(content=result[outputfield], name=name)]}
+    return {"messages": [AIMessage(content=result[output_field], name=name)]}
 
 
 def create_agent(
@@ -47,7 +52,7 @@ def create_agent(
     return executor
 
 
-def create_team_supervisor(llm: ChatOpenAI, system_prompt, members):
+def create_team_supervisor(llm: BaseChatModel, system_prompt, members):
     """An LLM-based router."""
     options = ["FINISH"] + members
     function_def = {

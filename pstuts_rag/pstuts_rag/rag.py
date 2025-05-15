@@ -119,9 +119,7 @@ class RAGChainFactory:
             return text, references
 
         else:
-            raise ValueError(
-                f"No '**References:**' section found in input:\n{content}"
-            )
+            return content, ""
 
     def __init__(
         self,
