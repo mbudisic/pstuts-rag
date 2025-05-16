@@ -6,7 +6,7 @@ import uuid
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_core.documents import Document
-
+from langchain_core.embeddings import Embeddings
 from .loader import VideoTranscriptBulkLoader, VideoTranscriptChunkLoader
 
 from langchain_core.vectorstores import VectorStoreRetriever
@@ -24,7 +24,7 @@ def batch(iterable: List[Any], size: int = 16) -> Iterator[List[Any]]:
 
 async def chunk_transcripts(
     json_transcripts: List[Dict[str, Any]],
-    semantic_chunker_embedding_model: OpenAIEmbeddings = OpenAIEmbeddings(
+    semantic_chunker_embedding_model: Embeddings = OpenAIEmbeddings(
         model="text-embedding-3-small"
     ),
 ) -> List[Document]:
@@ -125,10 +125,11 @@ class DatastoreManager:
     qdrant_client: QdrantClient
     name: str
     vector_store: QdrantVectorStore
+    dimensions: int
 
     def __init__(
         self,
-        embeddings: OpenAIEmbeddings = OpenAIEmbeddings(
+        embeddings: Embeddings = OpenAIEmbeddings(
             model="text-embedding-3-small"
         ),
         qdrant_client: QdrantClient = QdrantClient(location=":memory:"),
@@ -145,9 +146,14 @@ class DatastoreManager:
         self.name = name
         self.qdrant_client = qdrant_client
 
+        # determine embedding dimension
+        self.dimensions = len(embeddings.embed_query("test"))
+
         self.qdrant_client.recreate_collection(
             collection_name=self.name,
-            vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+            vectors_config=VectorParams(
+                size=self.dimensions, distance=Distance.COSINE
+            ),
         )
 
         # wrapper around the client
