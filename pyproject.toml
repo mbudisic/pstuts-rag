@@ -38,6 +38,7 @@ dependencies = [
     "pylint-venv>=3.0.4",
     "pyppeteer>=0.0.25",
     "grandalf>=0.8",
+    "jupyter-contrib-nbextensions>=0.7.0",
 ]
 authors = [{ name = "Marko Budisic", email = "mbudisic@gmail.com" }]
 license = "MIT"
