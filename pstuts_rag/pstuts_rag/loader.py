@@ -55,7 +55,7 @@ class VideoTranscriptBulkLoader(BaseLoader):
             )
 
 
-class VideoTranscriptLoader(BaseLoader):
+class VideoTranscriptChunkLoader(BaseLoader):
     """Loads video transcripts as individual chunks into documents"""
 
     def __init__(self, json_payload: List[Dict]):

@@ -7,7 +7,7 @@ from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_core.documents import Document
 
-from .loader import VideoTranscriptBulkLoader, VideoTranscriptLoader
+from .loader import VideoTranscriptBulkLoader, VideoTranscriptChunkLoader
 
 from langchain_core.vectorstores import VectorStoreRetriever
 
@@ -46,7 +46,7 @@ async def chunk_transcripts(
     docs_full_transcript: List[Document] = VideoTranscriptBulkLoader(
         json_payload=json_transcripts
     ).load()
-    docs_chunks_verbatim: List[Document] = VideoTranscriptLoader(
+    docs_chunks_verbatim: List[Document] = VideoTranscriptChunkLoader(
         json_payload=json_transcripts
     ).load()
 
