@@ -3,7 +3,7 @@ name = "pstuts_rag"
 version = "2025.05.12"
 description = "Agentic RAG system for PsTuts dataset"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "aiohttp>=3.8.0",
     "chainlit==2.0.4",
@@ -60,7 +60,7 @@ dev = [
 
 [tool.ruff]
 line-length = 79
-target-version = "py313"
+target-version = "py311"
 select = ["E", "F", "I", "N", "W"]
 ignore = []
 
@@ -69,7 +69,7 @@ known-first-party = ["src"]
 
 [tool.black]
 line-length = 79
-target-version = ["py313"]
+target-version = ["py311"]
 
 # [tool.mypy]
 # python_version = "3.13"
