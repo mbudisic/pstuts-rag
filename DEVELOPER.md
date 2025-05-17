@@ -4,20 +4,45 @@
 
 ```
 .
-├── app.py              # Main Chainlit application
-├── requirements.txt    # Project dependencies
-└── README.md          # User documentation
+├── app.py                # Main Chainlit application
+├── app_simple_rag.py     # Simplified RAG application 
+├── pyproject.toml        # Project configuration and dependencies
+├── pstuts_rag/           # Core package
+│   └── pstuts_rag/       # Source code
+│       ├── __init__.py
+│       ├── datastore.py  # Vector database management
+│       ├── loader.py     # Data loading utilities
+│       ├── rag.py        # RAG implementation
+│       ├── agents.py     # Team agent implementation
+│       └── ...
+├── data/                 # Dataset files
+└── README.md             # User documentation
+```
+
+## 🧩 Dependency Structure
+
+Dependencies are organized into logical groups:
+
+- **Core**: Basic dependencies needed for the RAG system (includes Jupyter support)
+- **Dev**: Development tools (linting, testing, etc.)
+- **Web**: Dependencies for web server functionality
+- **Extras**: Additional optional packages (numpy, ragas, tavily)
+
+You can install different combinations using pip's extras syntax:
+```bash
+pip install -e ".[dev,web]"  # Install core + dev + web dependencies
 ```
 
 ## 🔧 Technical Details
 
-The application uses Chainlit (v0.7.700+) to create a simple chat interface. The main functionality is implemented in `app.py` using the `@cl.on_message` decorator to handle incoming messages.
+The application uses LangChain, LangGraph, and Chainlit to create an agentic RAG system:
 
 ### Key Components
 
-- `@cl.on_message`: Decorator that handles incoming messages from the chat interface
-- `cl.Message`: Class for creating and sending messages back to the user
-- Async/await pattern for handling message processing
+- **DatastoreManager**: Manages the Qdrant vector store and document retrieval
+- **RAGChainFactory**: Creates retrieval-augmented generation chains
+- **PsTutsTeamState**: Manages the state of the agent-based system
+- **Langgraph**: Implements the routing logic between different agents
 
 ## 🚀 Running Locally
 
@@ -29,22 +54,36 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 2. Install dependencies:
 ```bash
-pip install -r requirements.txt
+pip install -e ".[dev]"  # Install with development tools
 ```
 
-3. Run the development server:
+3. Set up API keys:
+```bash
+export OPENAI_API_KEY="your-openai-key"
+export TAVILY_API_KEY="your-tavily-key"  # Optional, for web search
+```
+
+4. Run the application:
 ```bash
 chainlit run app.py
 ```
 
-## 🔍 Debugging
+## 🧪 Code Quality
 
-- Chainlit provides a built-in debug mode. Run with:
+To check for dependency issues:
 ```bash
-chainlit run app.py --debug
+deptry .
+```
+
+For linting:
+```bash
+black .
+ruff check .
+mypy .
 ```
 
 ## 📚 Resources
 
 - [Chainlit Documentation](https://docs.chainlit.io)
-- [Chainlit GitHub Repository](https://github.com/Chainlit/chainlit) 
+- [LangChain Documentation](https://python.langchain.com/docs/get_started/introduction)
+- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/) 
