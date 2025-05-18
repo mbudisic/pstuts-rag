@@ -10,11 +10,15 @@ import re
 
 from operator import itemgetter
 from typing import Any, Dict, List, Tuple
+import logging
 
+
+from qdrant_client import QdrantClient
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
+from langchain_core.embeddings import Embeddings
 from langchain_core.runnables import (
     Runnable,
     RunnableLambda,
@@ -22,8 +26,11 @@ from langchain_core.runnables import (
 )
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_openai import ChatOpenAI
+from langchain_qdrant import QdrantVectorStore
 
 from .prompt_templates import RAG_PROMPT_TEMPLATES
+
+from .datastore import DatastoreManager
 
 
 class RAGChainFactory:
@@ -166,4 +173,89 @@ class RAGChainFactory:
             | self.pack_references
         )
 
+        return self.rag_chain
+
+
+class RAGChainInstance:
+    """
+    A class that encapsulates a Retrieval-Augmented Generation (RAG) chain.
+    It has been abstracted from app_simple_rag.py but implemented in not-fully-
+    async manner.
+
+    This class manages the components needed for a RAG system, including
+    embeddings, vector store, document storage, and the chain itself. It
+    provides methods to initialize and build the RAG chain from JSON data.
+
+    Attributes:
+        embeddings (Embeddings): The embedding model used to convert text to vectors.
+        docs (List[Document]): List of documents to be processed.
+        qdrant_client (QdrantClient): Client for interacting with Qdrant vector database.
+        vector_store (QdrantVectorStore): Vector store for document embeddings.
+        datastore_manager (DatastoreManager): Manager for document storage and retrieval.
+        rag_factory (RAGChainFactory): Factory for creating RAG chains.
+        llm (BaseChatModel): Language model used for generating responses.
+        rag_chain (Runnable): The assembled RAG chain.
+        name (str): Identifier for this RAG chain instance.
+        pointsLoaded (int): Number of data points loaded into the vector store.
+    """
+
+    embeddings: Embeddings = None
+    docs: List[Document] = []
+    qdrant_client: QdrantClient = None
+    vector_store: QdrantVectorStore = None
+    datastore_manager: DatastoreManager
+    rag_factory: RAGChainFactory
+    llm: BaseChatModel
+    rag_chain: Runnable | None = None
+    name: str
+
+    pointsLoaded: int = 0
+
+    def __init__(self, name, qdrant_client, llm, embeddings) -> None:
+        """
+        Initialize a new RAG chain instance.
+
+        Args:
+            name (str): Identifier for this RAG chain instance.
+            qdrant_client (QdrantClient): Client for Qdrant vector database.
+            llm (BaseChatModel): Language model for response generation.
+            embeddings (Embeddings): Embedding model for text vectorization.
+        """
+        self.name = name
+        self.qdrant_client = qdrant_client
+        self.llm = llm
+        self.embeddings = embeddings
+
+    async def build_chain(
+        self, json_payload: List[Dict[str, Any]]
+    ) -> Runnable:
+        """
+        Build the RAG chain using the provided JSON data.
+
+        This method initializes the datastore manager, populates the database if empty,
+        creates the RAG factory, and assembles the final RAG chain.
+
+        Args:
+            json_payload (List[Dict[str,Any]]): List of JSON documents to be processed.
+
+        Returns:
+            Runnable: The assembled RAG chain ready for invocation.
+        """
+
+        self.datastore_manager = DatastoreManager(
+            qdrant_client=self.qdrant_client, name=self.name
+        )
+        if self.datastore_manager.count_docs() == 0:
+            self.pointsLoaded = await self.datastore_manager.populate_database(
+                raw_docs=json_payload
+            )
+            logging.info(
+                "JSON payload resulted in %d vectordb points.",
+                self.pointsLoaded,
+            )
+
+        self.rag_factory = RAGChainFactory(
+            retriever=self.datastore_manager.get_retriever()
+        )
+        self.rag_chain = self.rag_factory.get_rag_chain(self.llm)
         return self.rag_chain
