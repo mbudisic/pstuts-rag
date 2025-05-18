@@ -9,13 +9,18 @@ import asyncio
 from pathlib import Path
 
 
+def load_json_string(content: str, group: str):
+    payload: List[Dict] = json.loads(content)
+    [video.update({"group": group}) for video in payload]
+    return payload
+
+
 async def load_single_json(filepath):
     my_path = Path(filepath)
 
     async with aiofiles.open(my_path, mode="r", encoding="utf-8") as f:
         content = await f.read()
-        payload: List[Dict] = json.loads(content)
-        [video.update({"group": my_path.name}) for video in payload]
+        payload = load_json_string(content, my_path.name)
 
     return payload
 
