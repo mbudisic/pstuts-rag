@@ -120,7 +120,7 @@ class DatastoreManager:
         vector_store: The Qdrant vector store instance
     """
 
-    embeddings: OpenAIEmbeddings
+    embeddings: Embeddings
     docs: List[Document]
     qdrant_client: QdrantClient
     name: str

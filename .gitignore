@@ -5,3 +5,4 @@ __pycache__/
 .chainlit/
 .files/
 .vscode/qdrant_local_db/
+.embeddings_cache/

@@ -14,21 +14,21 @@ dependencies = [
     "langchain-qdrant>=0.2.0",
     "langgraph>=0.4.3",
     "qdrant-client>=1.8.0",
-    
     # API integration
     "chainlit==2.0.4",
     "requests>=2.31.0",
     "python-dotenv>=0.9.9",
-    
     # Utilities
     "nest-asyncio>=1.5.6",
     "aiofiles>=23.1.0",
-    
     # Jupyter/notebook dependencies
     "ipykernel>=6.29.5",
     "ipywidgets>=8.1.7",
     "jupyter>=1.1.1",
     "jupyter-contrib-nbextensions>=0.7.0",
+    "sentence-transformers>=3.4.1",
+    "datasets>=3.6.0",
+    "ragas==0.2.15",
 ]
 authors = [{ name = "Marko Budisic", email = "mbudisic@gmail.com" }]
 license = "MIT"
@@ -62,7 +62,6 @@ web = [
 
 extras = [
     "numpy==2.2.2",
-    "ragas>=0.2.15",
     "tavily-python>=0.7.2",
 ]
 
