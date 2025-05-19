@@ -6,3 +6,4 @@ __pycache__/
 .files/
 .vscode/qdrant_local_db/
 .embeddings_cache/
+notebooks/*/

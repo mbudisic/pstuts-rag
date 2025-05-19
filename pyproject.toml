@@ -27,8 +27,13 @@ dependencies = [
     "jupyter>=1.1.1",
     "jupyter-contrib-nbextensions>=0.7.0",
     "sentence-transformers>=3.4.1",
+    "transformers[torch]>=4.48.3",
+    "pyarrow>=19.0.0",
     "datasets>=3.6.0",
     "ragas==0.2.15",
+    "bidict>=0.23.1",
+    "wandb>=0.19.11",
+    "langchain-huggingface>=0.2.0",
 ]
 authors = [{ name = "Marko Budisic", email = "mbudisic@gmail.com" }]
 license = "MIT"
