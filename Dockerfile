@@ -21,7 +21,7 @@ COPY --chown=user . $HOME/app
 
 # Install the dependencies
 # Install both core and web dependencies
-RUN uv sync --with-extras web
+RUN uv sync --extra web
 
 # Expose the port
 EXPOSE 7860
