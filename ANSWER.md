@@ -5,13 +5,13 @@ Marko Budisic
 ## Deliverables
 
 1. [Main Github repo](https://github.com/mbudisic/pstuts-rag)
-2. [Github repo for creating the golden dataset](https://github.com/adobe-research/PsTuts-VQA-Dataset)
-3. [Loom video]()
-4. [Written document](https://github.com/mbudisic/pstuts-rag/blob/main/ANSWER.md)
-5. [Hugging Face live demo](https://huggingface.co/spaces/mbudisic/PsTuts-RAG)
-6. [Fine tuned embedding model](https://huggingface.co/mbudisic/snowflake-arctic-embed-s-ft-pstuts)
-7. [Corpus dataset](https://huggingface.co/datasets/mbudisic/PsTuts-VQA)
-8. [Golden Q&A dataset](https://huggingface.co/datasets/mbudisic/pstuts_rag_qa)
+1. [Github repo for creating the golden dataset](https://github.com/adobe-research/PsTuts-VQA-Dataset)
+1. [Written document](https://github.com/mbudisic/pstuts-rag/blob/main/ANSWER.md)
+1. [Loom video](https://www.loom.com/share/c999e4754b8a4ace8e62c863f9c6f31e?sid=075c3590-fa54-4754-84db-9c0cbbe876ce)
+1. [Hugging Face live demo](https://huggingface.co/spaces/mbudisic/PsTuts-RAG)
+1. [Fine tuned embedding model](https://huggingface.co/mbudisic/snowflake-arctic-embed-s-ft-pstuts)
+1. [Corpus dataset](https://huggingface.co/datasets/mbudisic/PsTuts-VQA)
+1. [Golden Q&A dataset](https://huggingface.co/datasets/mbudisic/pstuts_rag_qa)
 
 ## ToC
 
