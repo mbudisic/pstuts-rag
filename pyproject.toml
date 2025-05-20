@@ -34,6 +34,17 @@ dependencies = [
     "bidict>=0.23.1",
     "wandb>=0.19.11",
     "langchain-huggingface>=0.2.0",
+    "websockets>=14.2",
+    # Added missing direct dependencies
+    "pandas>=2.0.0",
+    "torch>=2.0.0",
+    "scikit-learn>=1.0.0",
+    "tqdm>=4.65.0",
+    "scipy>=1.10.0",
+    "langsmith>=0.0.50",
+    "google>=3.0.0",
+    "numpy==2.2.2",
+    "tavily-python>=0.7.2",
 ]
 authors = [{ name = "Marko Budisic", email = "mbudisic@gmail.com" }]
 license = "MIT"
@@ -63,11 +74,6 @@ web = [
     "python-multipart>=0.0.18,<0.0.19",
     "websockets==14.2",
     "httpx==0.27.0",
-]
-
-extras = [
-    "numpy==2.2.2",
-    "tavily-python>=0.7.2",
 ]
 
 [tool.ruff]
@@ -123,6 +129,10 @@ DEP002 = [
     # Other packages
     "numpy",
     "tavily-python",
+    # Added unused dependencies
+    "transformers",
+    "pyarrow",
+    "google-api-python-client",
 ]
 DEP003 = [
     "huggingface_hub",

@@ -1,4 +1,3 @@
-
 # Get a distribution that has uv already installed
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 
@@ -21,8 +20,8 @@ WORKDIR $HOME/app
 COPY --chown=user . $HOME/app
 
 # Install the dependencies
-# RUN uv sync --frozen
-RUN uv sync
+# Install both core and web dependencies
+RUN uv sync --with-extras web
 
 # Expose the port
 EXPOSE 7860
