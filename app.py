@@ -13,7 +13,7 @@ from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
-from langchain_openai.embeddings import OpenAIEmbeddings
+from langchain_core.embeddings import Embeddings
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 
@@ -33,6 +33,12 @@ from pstuts_rag.prompt_templates import SUPERVISOR_SYSTEM
 
 import nest_asyncio
 from uuid import uuid4
+
+from sentence_transformers import SentenceTransformer
+import logging
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("langchain").setLevel(logging.WARNING)
 
 # Apply nested asyncio to enable nested event loops
 nest_asyncio.apply()
@@ -56,8 +62,8 @@ class ApplicationParameters:
         tool_calling_model: Name of the OpenAI model to use for tool calling
     """
 
-    filename = [f"data/{f}.json" for f in ["dev"]]
-    embedding_model = "text-embedding-3-small"
+    filename = [f"data/{f}.json" for f in ["dev", "test", "train"]]
+    embedding_model = "mbudisic/snowflake-arctic-embed-s-ft-pstuts"
     n_context_docs = 2
     tool_calling_model = "gpt-4.1-mini"
 
@@ -96,12 +102,12 @@ class ApplicationState:
         pointsLoaded: Number of data points loaded into the database
     """
 
-    embeddings: OpenAIEmbeddings = None
+    embeddings: Embeddings = None
     docs: List[Document] = []
     qdrant_client: QdrantClient = None
     vector_store: QdrantVectorStore = None
     datastore_manager: pstuts_rag.datastore.DatastoreManager
-    rag_factory: pstuts_rag.rag.RAGChainFactory
+    rag: pstuts_rag.rag.RAGChainInstance
     llm: BaseChatModel
     rag_chain: Runnable
 
@@ -149,30 +155,12 @@ async def fill_the_db(
     Returns:
         0 if database already has documents, otherwise None
     """
-    if state.datastore_manager.count_docs() == 0:
-        data: List[Dict[str, Any]] = await load_json_files(params.filename)
-        state.pointsLoaded = await state.datastore_manager.populate_database(
-            raw_docs=data
-        )
-        await cl.Message(
-            content=f"✅ The database has been loaded with {app_state.pointsLoaded} elements!"
-        ).send()
-    else:
-        return 0
+    data: List[Dict[str, Any]] = await load_json_files(params.filename)
 
-
-async def build_the_chain():
-    """
-    Builds the RAG chain using the application state components.
-
-    Sets up the retrieval-augmented generation factory, initializes the language model,
-    and creates the RAG chain.
-    """
-    app_state.rag_factory = pstuts_rag.rag.RAGChainFactory(
-        retriever=app_state.datastore_manager.get_retriever()
-    )
-    app_state.llm = ChatOpenAI(model=params.tool_calling_model, temperature=0)
-    app_state.rag_chain = app_state.rag_factory.get_rag_chain(app_state.llm)
+    _ = await state.rag.build_chain(data)
+    await cl.Message(
+        content=f"✅ The database has been loaded with {state.rag.pointsLoaded} elements!"
+    ).send()
 
 
 async def build_the_graph(current_state: ApplicationState):
@@ -190,13 +178,12 @@ async def build_the_graph(current_state: ApplicationState):
     )
 
     rag_node, _ = create_rag_node(
-        retriever=app_state.datastore_manager.get_retriever(),
-        llm=app_state.llm,
+        rag_chain=current_state.rag.rag_chain,
         name=VIDEOARCHIVE,
     )
 
     supervisor_agent = create_team_supervisor(
-        app_state.llm,
+        current_state.llm,
         SUPERVISOR_SYSTEM,
         [VIDEOARCHIVE, ADOBEHELP],
     )
@@ -229,6 +216,12 @@ async def build_the_graph(current_state: ApplicationState):
     app_state.ai_graph = enter_chain | ai_graph.compile()
 
 
+async def initialize():
+
+    await fill_the_db(app_state)
+    await build_the_graph(app_state)
+
+
 def enter_chain(message: str):
     """
     Entry point for the agent graph chain.
@@ -258,18 +251,16 @@ async def on_chat_start():
     """
     app_state.llm = ChatOpenAI(model=params.tool_calling_model, temperature=0)
     app_state.qdrant_client = QdrantClient(":memory:")
+    app_state.embeddings = SentenceTransformer(params.embedding_model)
 
-    app_state.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-
-    app_state.datastore_manager = pstuts_rag.datastore.DatastoreManager(
+    app_state.rag = pstuts_rag.rag.RAGChainInstance(
+        name="deployed",
         qdrant_client=app_state.qdrant_client,
-        name="local_test",
+        llm=app_state.llm,
         embeddings=app_state.embeddings,
     )
 
-    app_state.tasks.append(asyncio.create_task(fill_the_db(app_state)))
-
-    app_state.tasks.append(asyncio.create_task(build_the_graph(app_state)))
+    app_state.tasks.append(asyncio.create_task(initialize()))
 
 
 def process_response(
@@ -304,13 +295,13 @@ def process_response(
                 msg_references.append(
                     cl.Message(
                         content=(
-                            f"Watch {ref["title"]} from timestamp "
-                            f"{round(ref["start"] // 60)}m:{round(ref["start"] % 60)}s"
+                            f"Watch {ref['title']} from timestamp "
+                            f"{round(ref['start'] // 60)}m:{round(ref['start'] % 60)}s"
                         ),
                         elements=[
                             cl.Video(
                                 name=ref["title"],
-                                url=f"{ref["source"]}#t={ref["start"]}",
+                                url=f"{ref['source']}#t={ref['start']}",
                                 display="side",
                             )
                         ],
@@ -358,7 +349,7 @@ def process_response(
 
 
 @cl.on_message
-async def main(message: cl.Message):
+async def main(user_cl_message: cl.Message):
     """
     Processes incoming user messages and sends responses.
 
@@ -369,15 +360,15 @@ async def main(message: cl.Message):
         message: User's input message
     """
     for s in app_state.ai_graph.stream(
-        message.content, {"recursion_limit": 20}
+        user_cl_message.content, {"recursion_limit": 20}
     ):
         if "__end__" not in s and "supervisor" not in s.keys():
             for [node_type, node_response] in s.items():
                 print(f"Processing {node_type} messages")
-                for message in node_response["messages"]:
-                    print(f"Message {message}")
+                for node_message in node_response["messages"]:
+                    print(f"Message {node_message}")
                     msg = cl.Message(content="")
-                    text, references = process_response(message)
+                    text, references = process_response(node_message)
                     for token in [char for char in text]:
                         await msg.stream_token(token)
                     await msg.send()

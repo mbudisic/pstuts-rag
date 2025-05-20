@@ -30,7 +30,15 @@ def agent_node(
     if "team_members" not in state:
         state["team_members"] = []
     result = agent.invoke(state)
-    return {"messages": [AIMessage(content=result[output_field], name=name)]}
+
+    # Check if result[output_field] is already an AIMessage
+    if isinstance(result[output_field], AIMessage):
+        # Extract just the content string from the AIMessage
+        content = result[output_field].content
+    else:
+        content = result[output_field]
+
+    return {"messages": [AIMessage(content=content, name=name)]}
 
 
 def create_agent(
