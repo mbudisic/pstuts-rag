@@ -1,5 +1,5 @@
 # Get a distribution that has uv already installed
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
 
 # Add user - this is the user that will run the app
 # If you do not set user, the app will run as root (undesirable)
