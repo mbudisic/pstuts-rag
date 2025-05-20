@@ -2,9 +2,9 @@
 
 Marko Budisic
 
-## Deliverables:
+## Deliverables
 
-1. [Main Github repo]
+1. [Main Github repo](https://github.com/mbudisic/pstuts-rag)
 2. [Github repo for creating the golden dataset](https://github.com/adobe-research/PsTuts-VQA-Dataset)
 3. [Loom video]()
 4. [Written document](https://github.com/mbudisic/pstuts-rag/blob/main/ANSWER.md)
@@ -12,6 +12,29 @@ Marko Budisic
 6. [Fine tuned embedding model](https://huggingface.co/mbudisic/snowflake-arctic-embed-s-ft-pstuts)
 7. [Corpus dataset](https://huggingface.co/datasets/mbudisic/PsTuts-VQA)
 8. [Golden Q&A dataset](https://huggingface.co/datasets/mbudisic/pstuts_rag_qa)
+
+## ToC
+
+- [Certification Challenge](#certification-challenge)
+  - [Deliverables](#deliverables)
+  - [ToC](#toc)
+- [Task 1: Defining your Problem and Audience](#task-1-defining-your-problem-and-audience)
+- [Task 2: Propose a Solution](#task-2-propose-a-solution)
+- [Task 3: Dealing with the Data](#task-3-dealing-with-the-data)
+  - [3.1. Data Sources \& External APIs 📊+🌐:](#31-data-sources--external-apis-)
+  - [3.2. Chunking Strategy 🧠✂️:](#32-chunking-strategy-️)
+  - [3.3. Specific Data Needs for Other Parts 🧩:](#33-specific-data-needs-for-other-parts-)
+- [Task 4: Building a Quick End-to-End Prototype](#task-4-building-a-quick-end-to-end-prototype)
+  - [4.1. The Prototype Application 🖥️:](#41-the-prototype-application-️)
+  - [4.2. Deployment 🚀 (Hugging Face Space):](#42-deployment--hugging-face-space)
+- [Task 5: Creating a Golden Test Data Set](#task-5-creating-a-golden-test-data-set)
+  - [5.1. RAGAS Framework Assessment \& Results 📊:](#51-ragas-framework-assessment--results-)
+- [Task 6: Fine-Tuning Open-Source Embeddings](#task-6-fine-tuning-open-source-embeddings)
+  - [6.1. Fine-Tuning Process and Model Link 🔗:\*\*](#61-fine-tuning-process-and-model-link-)
+- [Task 7: Assessing Performance](#task-7-assessing-performance)
+  - [7.1. Comparative RAGAS Results 📊:](#71-comparative-ragas-results-)
+  - [7.2. Conclusions on Fine-Tuned Performance  🚀:](#72-conclusions-on-fine-tuned-performance--)
+- [8. Future changes](#8-future-changes)
 
 
 # Task 1: Defining your Problem and Audience
