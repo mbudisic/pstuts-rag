@@ -38,13 +38,31 @@ For our PsTuts RAG project, which uses video class transcripts, this is very imp
 **How it Works (The Gist):**
 Semantic chunking often uses embedding models. These models turn text into number lists (vectors) that show its meaning. By comparing how much alike the vectors for nearby sentences are, the system can find points where the meaning changes a lot. This suggests a topic shift and a good spot for a chunk break.
 
-The [Langchain library](https://python.langchain.com/docs/get_started/introduction) is a great tool for building LLM apps. It offers tools like the `SemanticChunker`. As the Langchain documentation for the `SemanticChunker` notes, its approach is "Taken from Greg Kamradt's wonderful notebook... All credits to him." ([see docs](https://python.langchain.com/api_reference/experimental/text_splitter/langchain_experimental.text_splitter.SemanticChunker.html#semanticchunker)). To honor this, in our project, we'll call the output of this process a **"Kamradt Chunk."** This term will refer to a semantically coherent segment of text produced by this method.
+The [Langchain library](https://python.langchain.com/docs/get_started/introduction) is a great tool for building LLM apps. It offers tools like the `SemanticChunker`. As the Langchain documentation for the `SemanticChunker` notes, its approach is "Taken from [Greg Kamradt's wonderful notebook](https://github.com/FullStackRetrieval-com/RetrievalTutorials/blob/main/tutorials/LevelsOfTextSplitting/5_Levels_Of_Text_Splitting.ipynb)... All credits to him." ([see docs](https://python.langchain.com/api_reference/experimental/text_splitter/langchain_experimental.text_splitter.SemanticChunker.html#semanticchunker)). To honor this, in our project, we'll call the output of this process a **"Kamradt chunk."** This term will refer to a semantically coherent segment of text produced by this method.
 
 ---
 
 ### 🛠️ Our First Try: Semantic Chunking with Time Links
 
-Let's look at how we first did this for the PsTuts video transcripts. A main reason for this first version was the need to link these Kamradt Chunks back to their exact times in the original videos. This helps users who want to jump right to that moment in a class.
+Let's look at how we first did this for the PsTuts video transcripts. A main reason for this first version was the need to link these Kamradt chunks back to their exact times in the original videos. This helps users who want to jump right to that moment in a class.
+
+The following diagram illustrates the overall data flow from raw transcripts to their storage as queryable, timestamped Kamradt chunks in the vector database:
+
+```mermaid
+graph TD
+    A[Video transcript: phrases+timestamps] -->|JSON phrase + time | B1(Phrases as documents: VideoTranscriptChunkLoader);
+    A --> |JSON phrase + time | B2[Merge phrases:  VideoTranscriptBulkLoader ];
+
+    B1 --> |Phrase+time| F_Assoc[ Search for phrase in Kamradt chunks ];
+    B2 --> | Full Transcript | D[SemanticChunker];
+
+    D --> | Kamradt chunks: Multi-phrase | F_Assoc;
+    F_Assoc --> |Kamradt chunks + time| H[Embedding model];
+
+    H --> |Vectorized Kamradt chunks + time| J[(Qdrant Vector Database)];
+```
+
+
 
 You can see the code in our GitHub project: [`mbudisic/pstuts-rag`](https://github.com/mbudisic/pstuts-rag/blob/main/).
 
@@ -83,9 +101,9 @@ We use two main loaders, found in `pstuts_rag/pstuts_rag/loader.py` ([view on Gi
     # )
     ```
 
-This way, we have two views of our data: one with tiny, timed sentences, and one with full texts ready for smart cutting into Kamradt Chunks.
+This way, we have two views of our data: one with tiny, timed sentences, and one with full texts ready for smart cutting into Kamradt chunks.
 
-**Step 2: Semantic Cutting (Making Kamradt Chunks) 🧠🔪**
+**Step 2: Semantic Cutting (Making Kamradt chunks) 🧠🔪**
 
 This part happens mostly in the `chunk_transcripts` function in `pstuts_rag/pstuts_rag/datastore.py` ([view on GitHub](https://github.com/mbudisic/pstuts-rag/blob/main/pstuts_rag/pstuts_rag/datastore.py)).
 
@@ -102,21 +120,21 @@ We give the `docs_full_transcript` (from `VideoTranscriptBulkLoader`) to Langcha
 #     ]
 # )
 # # Make a flat list of documents
-# docs_chunks_semantic: List[Document] = [] # These will be our Kamradt Chunks
+# docs_chunks_semantic: List[Document] = [] # These will be our Kamradt chunks
 # for group in docs_group:
 #     docs_chunks_semantic.extend(group)
 # ...
 ```
 
-The `SemanticChunker` smartly cuts the long transcript from each video into smaller, related Kamradt Chunks. Each of these `docs_chunks_semantic` (our Kamradt Chunks) now aims to be a clear idea or step from the class.
+The `SemanticChunker` smartly cuts the long transcript from each video into smaller, related Kamradt chunks. Each of these `docs_chunks_semantic` (our Kamradt chunks) now aims to be a clear idea or step from the class.
 
-Now, our Kamradt Chunks make sense text-wise. But they miss a key thing for videos: **timing**. A user asking "How do I use the clone stamp tool?" wants the text answer. But they also want to know *where* in the video that part is.
+Now, our Kamradt chunks make sense text-wise. But they miss a key thing for videos: **timing**. A user asking "How do I use the clone stamp tool?" wants the text answer. But they also want to know *where* in the video that part is.
 
-**Step 3: Linking Kamradt Chunks to Times 🕰️🔗**
+**Step 3: Linking Kamradt chunks to Times 🕰️🔗**
 
-This is a core part of our first plan: linking the Kamradt Chunks to the original, timed sentences. We need to find which of our first, small sentences (from `VideoTranscriptChunkLoader`) make up each new Kamradt Chunk.
+This is a core part of our first plan: linking the Kamradt chunks to the original, timed sentences. We need to find which of our first, small sentences (from `VideoTranscriptChunkLoader`) make up each new Kamradt chunk.
 
-Still in `chunk_transcripts` (`datastore.py`), we go through each Kamradt Chunk (`docs_chunks_semantic`). For each one, we look at our list of original, timed sentences (`docs_chunks_verbatim`):
+Still in `chunk_transcripts` (`datastore.py`), we go through each Kamradt chunk (`docs_chunks_semantic`). For each one, we look at our list of original, timed sentences (`docs_chunks_verbatim`):
 
 ```python
 # Part of chunk_transcripts in datastore.py
@@ -129,7 +147,7 @@ Still in `chunk_transcripts` (`datastore.py`), we go through each Kamradt Chunk 
 #         video_id_to_chunks[video_id] = []
 #     video_id_to_chunks[video_id].append(chunk_v)
 
-# for chunk_s in docs_chunks_semantic: # Our new Kamradt Chunk
+# for chunk_s in docs_chunks_semantic: # Our new Kamradt chunk
 #     video_id = chunk_s.metadata["video_id"]
 #     # Only check verbatim chunks from the same video
 #     potential_subchunks = video_id_to_chunks.get(video_id, [])
@@ -141,9 +159,9 @@ Still in `chunk_transcripts` (`datastore.py`), we go through each Kamradt Chunk 
 # ...
 ```
 
-The line `if c.page_content in chunk_s.page_content` is key. It works on the idea that the text of an original, timed sentence will be inside the text of the bigger Kamradt Chunk it is part of. This direct search works because the Kamradt Chunk is usually made of several original sentences put together.
+The line `if c.page_content in chunk_s.page_content` is key. It works on the idea that the text of an original, timed sentence will be inside the text of the bigger Kamradt chunk it is part of. This direct search works because the Kamradt chunk is usually made of several original sentences put together.
 
-After finding all original sentences (`subchunks`) that make up a Kamradt Chunk, we get their times:
+After finding all original sentences (`subchunks`) that make up a Kamradt chunk, we get their times:
 
 ```python
 # Part of chunk_transcripts in datastore.py
@@ -156,30 +174,30 @@ After finding all original sentences (`subchunks`) that make up a Kamradt Chunk,
 
 #     if times:  # Check if times list is not empty
 #         chunk_s.metadata["start"], chunk_s.metadata["stop"] = (
-#             times[0][0],    # Start time of the first sentence in the Kamradt Chunk
-#             times[-1][-1],  # End time of the last sentence in the Kamradt Chunk
+#             times[0][0],    # Start time of the first sentence in the Kamradt chunk
+#             times[-1][-1],  # End time of the last sentence in the Kamradt chunk
 #         )
 #     else:
 #         chunk_s.metadata["start"], chunk_s.metadata["stop"] = None, None
 # ...
 ```
 
-So, each Kamradt Chunk now has more info:
+So, each Kamradt chunk now has more info:
 *   `speech_start_stop_times`: A list of (start, end) times for every original sentence in it.
-*   `start`: The start time of the very first sentence in the Kamradt Chunk.
-*   `stop`: The end time of the very last sentence in the Kamradt Chunk.
+*   `start`: The start time of the very first sentence in the Kamradt chunk.
+*   `stop`: The end time of the very last sentence in the Kamradt chunk.
 
-This extra info is very useful. When our RAG system finds a Kamradt Chunk, it gets not just clear text, but also exact timing. This lets the user go right to that part in the source video.
+This extra info is very useful. When our RAG system finds a Kamradt chunk, it gets not just clear text, but also exact timing. This lets the user go right to that part in the source video.
 
 **Step 4: Storing for Search in a Vector Database 💾**
 
-Once our Kamradt Chunks are made and timed, we make vectors from them (again, using `OpenAIEmbeddings`). Then we store them in our vector database, Qdrant. The `DatastoreManager` class handles this, also in `pstuts_rag/pstuts_rag/datastore.py`.
+Once our Kamradt chunks are made and timed, we make vectors from them (again, using `OpenAIEmbeddings`). Then we store them in our vector database, Qdrant. The `DatastoreManager` class handles this, also in `pstuts_rag/pstuts_rag/datastore.py`.
 
 ```python
 # Part of DatastoreManager in datastore.py
 # ...
 # async def populate_database(self, raw_docs: List[Dict[str, Any]]) -> int:
-#     # Make Kamradt Chunks (with time links)
+#     # Make Kamradt chunks (with time links)
 #     self.docs: List[Document] = await chunk_transcripts(
 #         json_transcripts=raw_docs,
 #         semantic_chunker_embedding_model=self.embeddings,
@@ -188,7 +206,7 @@ Once our Kamradt Chunks are made and timed, we make vectors from them (again, us
 # ...
 ```
 
-The `DatastoreManager` creates vector embeddings for these rich Kamradt Chunks. It then puts them into Qdrant, so the RAG system can search them fast.
+The `DatastoreManager` creates vector embeddings for these rich Kamradt chunks. It then puts them into Qdrant, so the RAG system can search them fast.
 
 ---
 
@@ -196,9 +214,9 @@ The `DatastoreManager` creates vector embeddings for these rich Kamradt Chunks. 
 
 Why use this specific way for our first try?
 
-1.  **More To-the-Point Answers:** Kamradt Chunks aim to give LLMs more complete and clear info. This can lead to more on-target answers than simpler chunking ways.
+1.  **More To-the-Point Answers:** Kamradt chunks aim to give LLMs more complete and clear info. This can lead to more on-target answers than simpler chunking ways.
 2.  **Better User Navigation:** For videos, linking chunks to times is a big plus for users. They can go right to the point in a class where the info is, saving time.
-3.  **Good Use of Context Space:** LLMs have a limited context space. Clear Kamradt Chunks help use this space well by giving real info, not broken bits of text.
+3.  **Good Use of Context Space:** LLMs have a limited context space. Clear Kamradt chunks help use this space well by giving real info, not broken bits of text.
 4.  **Base for Fewer Errors:** When LLMs get better, focused context, they may make fewer mistakes or unsupported claims. The found chunks act as stronger guides.
 5.  **Works for Complex Content:** As source texts (or videos) get longer and more complex, the pluses of a semantic way to chunk usually show more.
 
@@ -212,15 +230,15 @@ While this first way has pluses, there are things to think about for future work
 
 *   **Ongoing Refinement and Evaluation:** This is our first version of the chunking strategy. Key next steps involve rigorously evaluating its performance with metrics (like RAGAS). We will also continue to explore and fine-tune aspects like embedding model selection, `SemanticChunker` parameters, and adapting our timestamp association logic, especially if we explore different underlying chunking mechanisms. Current computational costs and assumptions (like direct text matching for timestamping) will also be monitored and optimized as part of this iterative process.
 *   **Advanced Contextualization Techniques:** We plan to investigate sophisticated methods for context generation and retrieval from other research, such as those proposed by Anthropic. This could offer alternative ways to define and deliver the most relevant information to the LLM.
-*   **Enhanced Relatedness Measures:** Beyond semantic similarity, we aim to develop and incorporate additional signals for chunk relatedness. For sequential content like tutorials, using the temporal distance between Kamradt Chunks based on their timestamps could provide a valuable complementary metric.
+*   **Enhanced Relatedness Measures:** Beyond semantic similarity, we aim to develop and incorporate additional signals for chunk relatedness. For sequential content like tutorials, using the temporal distance between Kamradt chunks based on their timestamps could provide a valuable complementary metric.
 
 ---
 
 ### 🎬 Wrap-up: A Solid First Step in Chunking for RAG
 
-In essence, thoughtful data preparation, particularly through semantic chunking that preserves vital metadata like timestamps, is crucial for effective RAG systems. While simple methods offer speed, our approach in the PsTuts RAG project—creating timed 'Kamradt Chunks'—demonstrates a practical first step towards richer context and better user experience, especially for complex content like video tutorials. We invite you to explore the [PsTuts RAG project on GitHub](https://github.com/mbudisic/pstuts-rag/blob/main/) and share your own chunking insights in the comments below as we continue to refine this process.
+In essence, thoughtful data preparation, particularly through semantic chunking that preserves vital metadata like timestamps, is crucial for effective RAG systems. While simple methods offer speed, our approach in the PsTuts RAG project—creating timed 'Kamradt chunks'—demonstrates a practical first step towards richer context and better user experience, especially for complex content like video tutorials. We invite you to explore the [PsTuts RAG project on GitHub](https://github.com/mbudisic/pstuts-rag/blob/main/) and share your own chunking insights in the comments below as we continue to refine this process.
 
 #RAG #AI #LLM #SemanticChunking #KamradtChunk #VectorDatabase #Qdrant #Langchain #Python #Developer #DataScience #MachineLearning #PsTutsRAG
 
 ---
-*Note: The term "Kamradt Chunk" is used in this project to refer to the output of the `SemanticChunker` (from Langchain Experimental), named in acknowledgment of Greg Kamradt's foundational work in this area, as cited in the `SemanticChunker` documentation.*
+*Note: The term "Kamradt chunk" is used in this project to refer to the output of the `SemanticChunker` (from Langchain Experimental), named in acknowledgment of Greg Kamradt's foundational work in this area, as cited in the `SemanticChunker` documentation.*
