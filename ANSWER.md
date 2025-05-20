@@ -33,7 +33,6 @@ Marko Budisic
   - [6.1. Fine-Tuning Process and Model Link 🔗:\*\*](#61-fine-tuning-process-and-model-link-)
 - [Task 7: Assessing Performance](#task-7-assessing-performance)
   - [7.1. Comparative RAGAS Results 📊:](#71-comparative-ragas-results-)
-  - [7.2. Conclusions on Fine-Tuned Performance  🚀:](#72-conclusions-on-fine-tuned-performance--)
 - [8. Future changes](#8-future-changes)
 
 
@@ -117,9 +116,9 @@ Therefore, to achieve a useful semantic chunking for RAG, the following **semant
 
 ## 3.3. Specific Data Needs for Other Parts 🧩:
 
-*   **Evaluation & Golden Dataset (Tasks 5 & 7):** 🏆 Generating the "Golden Data Set" (Q-C-A triplets) for RAGAS is detailed in `create_golden_dataset.ipynb` (see [`PsTuts-VQA-Data-Operations` repo](https://github.com/mbudisic/PsTuts-VQA-Data-Operations)). The resulting dataset [hf.co:mbudisic/pstuts_rag_-_qa](https://huggingface.co/datasets/mbudisic/pstuts_rag_qa) is used to benchmark the RAG pipeline in `evaluate_rag.ipynb`. 📊
+*   **Evaluation & Golden Dataset (Tasks 5 & 7):** 🏆 Generating the "Golden Data Set" using Knowledge Graph to produce question-answer-context triplet in RAGAS is detailed in `create_golden_dataset.ipynb` (see [`PsTuts-VQA-Data-Operations` repo](https://github.com/mbudisic/PsTuts-VQA-Data-Operations)).  The resulting dataset [hf.co:mbudisic/pstuts_rag_-_qa](https://huggingface.co/datasets/mbudisic/pstuts_rag_qa) is used to benchmark the RAG pipeline in `evaluate_rag.ipynb` and fine-tune the embedding model. 📊
 
-*   **Embedding Model Fine-Tuning (Task 6):** 🔬 The `Fine_Tuning_Embedding_for_PSTuts.ipynb` notebook shows the use of [hf.co:mbudisic/pstuts_rag_-_qa](https://huggingface.co/datasets/mbudisic/pstuts_rag_qa) tp fine-tune the embedding model. This adapts models like `Snowflake/snowflake-arctic-embed-s` for improved retrieval. ⚙️
+*   **Embedding Model Fine-Tuning (Task 6):** 🔬 The `Fine_Tuning_Embedding_for_PSTuts.ipynb` notebook shows the use of [`hf.co:mbudisic/pstuts_rag_qa`](https://huggingface.co/datasets/mbudisic/pstuts_rag_qa) to fine-tune the embedding model. This adapts models like `Snowflake/snowflake-arctic-embed-s` for improved retrieval. ⚙️
 
 # Task 4: Building a Quick End-to-End Prototype
 
@@ -138,7 +137,7 @@ This setup indicates the prototype is packaged for public deployment. 🌍
 
 # Task 5: Creating a Golden Test Data Set
 
-The creation of the "Golden Test Data Set" is documented in the `create_golden_dataset.ipynb` notebook in the `PsTuts-VQA-Data-Operations` repository ([https://github.com/mbudisic/PsTuts-VQA-Data-Operations](https://github.com/mbudisic/PsTuts-VQA-Data-Operations)). This dataset (named `golden_small_hf` on Hugging Face) was then utilized in the `notebooks/evaluate_rag.ipynb` of the current project to assess the initial RAG pipeline with RAGAS. 🌟
+The creation of the "Golden Test Data Set" is documented in the `create_golden_dataset.ipynb` notebook in the  [`PsTuts-VQA-Data-Operations` repository](https://github.com/mbudisic/PsTuts-VQA-Data-Operations). This dataset was then utilized in the `notebooks/evaluate_rag.ipynb` of the current project to assess the initial RAG pipeline with RAGAS. 🌟
 
 ## 5.1. RAGAS Framework Assessment & Results 📊:
 
@@ -158,7 +157,7 @@ The initial RAG pipeline ("Base" model, `Snowflake/snowflake-arctic-embed-s` bef
 
 *   **Strengths:** 💪 High **Answer Relevancy (0.914)** indicates the system understands queries well.
 *   **Areas for Improvement:** 📉
-    *   **Faithfulness (0.721):** Answers are not always perfectly grounded in retrieved context.
+    *   **Faithfulness (0.721):** Answers are not always perfectly grounded in retrieved context. Maybe if I turned the temperature down to 0 this score would have been higher.
     *   **Context Recall (0.672):** Not all necessary information is always retrieved.
     *   **Factual Correctness (0.654):** Factual accuracy of answers needs improvement.
 *   **Overall:** The baseline system is good at relevant responses but needs better context retrieval and factual accuracy. This benchmarks a clear path for improvements, such as embedding fine-tuning. 🛠️
@@ -169,12 +168,11 @@ To enhance retrieval performance for a specific video library, an open-source em
 
 ## 6.1. Fine-Tuning Process and Model Link 🔗:**
 
-*   **Base Model:** `Snowflake/snowflake-arctic-embed-s` was chosen as the base model for fine-tuning in this example. ❄️
-*   **Fine-tuning Data:** For this specific example, a specialized dataset of (question, relevant_document_passage) pairs derived from Photoshop tutorials was generated/used, as detailed in `dataset_card.md` and implemented in `notebooks/Fine_Tuning_Embedding_for_PSTuts.ipynb`. A similar dataset would be created for any other specific domain. 🖼️
-*   **Process:** 🛠️ Fine-tuning used `sentence-transformers` to better map domain queries (e.g., Photoshop) to transcript passages. W&B tracked the process and evaluation. 📈
-*   **Resulting Model:** The fine-tuned model (for the Photoshop example) was saved and pushed to the Hugging Face Hub. 🤗
-*   **Hugging Face Hub Link (Example):** The fine-tuned embedding model for the Photoshop tutorial example is available at:
-    [mbudisic/snowflake-arctic-embed-s-ft-pstuts](https://huggingface.co/mbudisic/snowflake-arctic-embed-s-ft-pstuts)
+*   **Base Model:** `Snowflake/snowflake-arctic-embed-s` was chosen as the base model for fine-tuning in this example. The `-s` stands for small --  larger two models ended up taking too much GPU memory on my laptop. ❄️
+*   **Fine-tuning Data:** The fine-tuning notebook is `notebooks/Fine_Tuning_Embedding_for_PSTuts.ipynb`. It uses the golden dataset, retrieved from the HF repository. 🖼️ The data was split into `train`-`validate`-`test` blocks. `train` was used
+to compute the objective function in the training loop, while `validate` was used in evaluation.
+*   **Monitoring:** 🛠️  W&B tracked the process and evaluation. 📈
+*   **Resulting Model:** The fine-tuned model (for the Photoshop example) was saved and pushed to the Hugging Face Hub. 🤗 [mbudisic/snowflake-arctic-embed-s-ft-pstuts](https://huggingface.co/mbudisic/snowflake-arctic-embed-s-ft-pstuts)
 
 *(Evidence for this is in `notebooks/Fine_Tuning_Embedding_for_PSTuts.ipynb`, specifically the `model.push_to_hub` call and its output. The `app.py` can be (or is) configured to use such a fine-tuned model for the embedding step in the RAG pipeline.)*
 
@@ -196,28 +194,34 @@ The notebook provides a comparison between "Base", "SOTA" (OpenAI's `text-embedd
 | Factual Correctness    | 0.654          | 0.598           | -0.056            |
 | Context Entity Recall  | 0.636          | 0.636           | 0.000             |
 
+Additionally, statistical significance of changes `Base -> FT` and `FT -> SOTA` was assessed.
+
+**Overall conclusion is that all of these models perform similarly.**
+This can likely be attributed to the size of contexts (transcript for each video is fairly small)
+and their relative diversity, so even the two base models correctly identified the
+appropriate context and fine-tuning did not bring much benefit.
+
+The Hugging Face live demo runs the fine-tuned model.
+
 *(Note: These are mean scores. `Factual Correctness` is `factual_correctness(mode=f1)` in the notebook.)*
-
-## 7.2. Conclusions on Fine-Tuned Performance  🚀:
-
-*   **Impact of Fine-Tuning:**
-    *   **Faithfulness (+0.027):** ✅ A slight improvement, suggesting answers from the fine-tuned model are marginally more grounded in the retrieved context.
-    *   **Answer Relevancy (-0.095):** 📉 Surprisingly, relevancy decreased. While the FT model found technically similar content (e.g., Photoshop jargon), the LLM's answer framing may have become less aligned with user intent versus the base model.
-    *   **Context Recall (No Change):** 🤷‍♂️ Retrieval ability remained static. The notebook suggests this might be due to short video transcripts fitting into few chunks, where even base embeddings perform well.
-    *   **Factual Correctness (-0.056):** 📉 This also saw a decrease, which is concerning and counter-intuitive for a fine-tuning step aimed at domain specificity.
-*   **Overall Assessment of Fine-Tuning:** 🤔 Mixed results for `Snowflake/snowflake-arctic-embed-s` fine-tuning. Faithfulness slightly up, but answer relevancy and factual correctness surprisingly dropped. Context recall was unchanged (likely due to data nature). The notebook concludes embedding model tuning isn't the prime optimization spot here. 🎯
-*   
 
 # 8. Future changes
 
 *   **Expected Changes & Future Improvements:**
     1.  **Re-evaluate Fine-Tuning Strategy: 🤔** Given results, embedding fine-tuning needs review. This could involve:
-        *   Trying a different base model (larger, better transfer learning on small datasets).
         *   Augmenting the fine-tuning dataset or using different data generation strategies.
-        *   Adjusting fine-tuning hyperparameters.
+        *   Changing the semantic chunking strategy to produce more targeted context 
+            which may be especially important on edge devices. This could in turn 
+            increase the importance of fine tuning.
     2.  **Prompt Engineering: ✍️** Refine LLM agent prompts (supervisor, RAG) for better answer synthesis. This could boost factual correctness and relevancy, regardless of embedding model.
     3.  **Advanced RAG Techniques: ✨** Explore methods like re-ranking, query transformations, or HyDE. The goal is to improve context quality and relevance for the LLM.
-    4.  **LLM for Generation: 🧠** Experiment with different LLMs for answer generation. `evaluate_rag.ipynb` uses `gpt-4.1-nano` (RAG) and `gpt-4.1-mini` (evaluator); `app.py` uses `gpt-4.1-mini`. Consistency or a more powerful model might improve results.
-    5.  **Iterative Evaluation: 🔁** Keep using RAGAS on the golden dataset. This will meticulously track each change's impact.
+    4.  **LLM for Generation: 🧠** Experiment with different LLMs for answer generation. `evaluate_rag.ipynb` uses `gpt-4.1-nano` (RAG - for efficiency) and `gpt-4.1-mini` (evaluator); `app.py` uses `gpt-4.1-mini`. Consistency or a more powerful model might improve results.
+    5.  A more complex agent team. Possibilities:
+  
+       - LLM that writes queries for tools based on previous messages,
+       - Writing team that can develop a presentation based on the produced research results.
+       - A "highlighter" that can identify the object of discussion in the frame and circle it.
+       
+ -  6. A more complex ingestion pipeline, that is able to transcribe and OCR videos even when they are not accompanied by the transcripts.
 
-This concludes the update to `ANSWER.md` based on your instructions. 
+
