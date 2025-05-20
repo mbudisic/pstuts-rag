@@ -27,7 +27,7 @@ Marko Budisic
   - [Task 4: Building a Quick End-to-End Prototype](#task-4-building-a-quick-end-to-end-prototype)
     - [4.1. The Prototype Application 🖥️](#41-the-prototype-application-️)
     - [4.2. Deployment 🚀 (Hugging Face Space)](#42-deployment--hugging-face-space)
-  - [Task 5: Creating a Golden Test Data Set](#task-5-creating-a-golden-test-data-set)
+  - [Task 5: Creating a Golden Data Set](#task-5-creating-a-golden-data-set)
     - [5.1. RAGAS Framework Assessment \& Results 📊](#51-ragas-framework-assessment--results-)
   - [Task 6: Fine-Tuning Open-Source Embeddings](#task-6-fine-tuning-open-source-embeddings)
     - [6.1. Fine-Tuning Process and Model Link 🔗:\*\*](#61-fine-tuning-process-and-model-link-)
@@ -132,13 +132,14 @@ The `app.py` script is the core prototype. It uses Chainlit for the UI, LangChai
 ### 4.2. Deployment 🚀 (Hugging Face Space)
 
 The repository is structured for Hugging Face Space deployment:
-- `README.md` contains Hugging Face Space metadata (e.g., `sdk: docker`).
-- A `Dockerfile` enables containerization for deployment.
-This setup indicates the prototype is packaged for public deployment. 🌍
 
-## Task 5: Creating a Golden Test Data Set
+- `README.md` contains Hugging Face Space metadata.
+- `Dockerfile` enables containerization for deployment. Note the load of `web` 
+  dependencies from `pyproject.toml`.
 
-The creation of the "Golden Test Data Set" is documented in the `create_golden_dataset.ipynb` notebook in the  [`PsTuts-VQA-Data-Operations` repository](https://github.com/mbudisic/PsTuts-VQA-Data-Operations). This dataset was then utilized in the `notebooks/evaluate_rag.ipynb` of the current project to assess the initial RAG pipeline with RAGAS. 🌟
+## Task 5: Creating a Golden Data Set
+
+The creation of the "Golden Data Set" is documented in the `create_golden_dataset.ipynb` notebook in the  [`PsTuts-VQA-Data-Operations` repository](https://github.com/mbudisic/PsTuts-VQA-Data-Operations). This dataset was then utilized in the `notebooks/evaluate_rag.ipynb` of the current project to assess the initial RAG pipeline with RAGAS. 🌟
 
 ### 5.1. RAGAS Framework Assessment & Results 📊
 
@@ -175,7 +176,7 @@ to compute the objective function in the training loop, while `validate` was use
 - **Monitoring:** 🛠️  W&B tracked the process and evaluation. 📈
 - **Resulting Model:** The fine-tuned model (for the Photoshop example) was saved and pushed to the Hugging Face Hub. 🤗 [mbudisic/snowflake-arctic-embed-s-ft-pstuts](https://huggingface.co/mbudisic/snowflake-arctic-embed-s-ft-pstuts)
 
-_(Evidence for this is in `notebooks/Fine_Tuning_Embedding_for_PSTuts.ipynb`, specifically the `model.push_to_hub` call and its output. The `app.py` can be (or is) configured to use such a fine-tuned model for the embedding step in the RAG pipeline.)_
+_(See `notebooks/Fine_Tuning_Embedding_for_PSTuts.ipynb`, specifically the `model.push_to_hub` call and its output. The `app.py` is configured to use such a fine-tuned model for the embedding step in the RAG pipeline.)_
 
 ## Task 7: Assessing Performance
 
@@ -195,6 +196,8 @@ The notebook provides a comparison between "Base", "SOTA" (OpenAI's `text-embedd
 | Factual Correctness    | 0.654          | 0.598           | -0.056            |
 | Context Entity Recall  | 0.636          | 0.636           | 0.000             |
 
+_(Note: These are mean scores.)_
+
 Additionally, statistical significance of changes `Base -> FT` and `FT -> SOTA` was assessed.
 
 **Overall conclusion is that all of these models perform similarly.**
@@ -204,7 +207,7 @@ appropriate context and fine-tuning did not bring much benefit.
 
 The Hugging Face live demo runs the fine-tuned model.
 
-_(Note: These are mean scores. `Factual Correctness` is `factual_correctness(mode=f1)` in the notebook.)_
+
 
 ## 8. Future changes
 
