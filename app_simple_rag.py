@@ -16,7 +16,7 @@ from qdrant_client import QdrantClient
 
 import pstuts_rag.datastore
 import pstuts_rag.rag
-from pstuts_rag.loader import load_json_files
+from pstuts_rag.datastore import load_json_files
 
 
 @dataclass

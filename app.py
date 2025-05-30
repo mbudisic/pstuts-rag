@@ -29,7 +29,7 @@ import pstuts_rag.rag
 
 from pstuts_rag.graph import create_rag_node
 
-from pstuts_rag.loader import load_json_files
+from pstuts_rag.datastore import load_json_files
 from pstuts_rag.prompts import SUPERVISOR_SYSTEM
 
 import nest_asyncio
