@@ -97,6 +97,15 @@ pip install -e ".[dev,web]"        # Core + dev + web server
 - **`chunk_transcripts()`**: Async semantic chunking with timestamp preservation
 - **Custom embedding models**: Fine-tuned embeddings for PsTuts domain
 
+#### ⚡ Asynchronous Loading System
+- **`DatastoreManager.loading_complete`**: AsyncIO Event object that's set when data loading completes
+- **`DatastoreManager.is_ready()`**: Convenience method to check if loading is complete
+- **`DatastoreManager.wait_for_loading(timeout)`**: Async method to wait for loading completion with optional timeout
+- **`DatastoreManager.add_completion_callback(callback)`**: Register callbacks (sync or async) to be called when loading completes
+- **Non-blocking startup**: Vector database loading runs in background threads to prevent UI blocking
+- **Background processing**: `asyncio.create_task()` used for concurrent data loading during application startup
+- **Event-driven notifications**: Hook into loading completion for reactive programming patterns
+
 #### 🔍 Evaluation System
 - **`evaluator_utils.py`**: RAG evaluation utilities using RAGAS framework
 - **Notebook-based evaluation**: `evaluate_rag.ipynb` for systematic testing
@@ -165,3 +174,37 @@ ipdb  # Available for interactive debugging
 - [LangGraph Documentation](https://langchain-ai.github.io/langgraph/) 🕸️
 - [Qdrant Documentation](https://qdrant.tech/documentation/) 🔍
 - [RAGAS Documentation](https://docs.ragas.io/) 📊 
+
+### 🔄 Usage Examples
+
+#### Event-Based Loading with Callbacks
+```python
+# Option 1: Custom callback passed to startup
+async def my_completion_handler():
+    print("✅ Database is ready for queries!")
+    await notify_users("System ready")
+
+datastore = await startup(
+    config=my_config,
+    on_loading_complete=my_completion_handler
+)
+
+# Option 2: Register callbacks after initialization
+datastore = await startup(config=my_config)
+
+# Add additional callbacks
+def on_complete():
+    print("✅ Loading finished!")
+
+async def on_complete_async():
+    await send_notification("Database ready")
+
+datastore.add_completion_callback(on_complete)
+datastore.add_completion_callback(on_complete_async)
+
+# Option 3: Wait for completion with timeout
+if await datastore.wait_for_loading(timeout=60):
+    print("Loading completed within timeout")
+else:
+    print("Loading timed out")
+``` 
