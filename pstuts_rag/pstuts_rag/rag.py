@@ -28,7 +28,7 @@ from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_openai import ChatOpenAI
 from langchain_qdrant import QdrantVectorStore
 
-from .prompt_templates import RAG_PROMPT_TEMPLATES
+from .prompts import RAG_PROMPT_TEMPLATES
 
 from .datastore import DatastoreManager
 

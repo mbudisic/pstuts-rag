@@ -9,7 +9,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.language_models import BaseChatModel
 
 from langgraph.graph import END, StateGraph
-import pstuts_rag.prompt_templates
+import pstuts_rag.prompts
 from pstuts_rag.state import PsTutsTeamState
 
 
@@ -41,7 +41,7 @@ def create_agent(
     system_prompt: str,
 ):
     """Create a function-calling agent and add it to the graph."""
-    system_prompt += pstuts_rag.prompt_templates.AGENT_SYSTEM
+    system_prompt += pstuts_rag.prompts.AGENT_SYSTEM
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", system_prompt),
@@ -78,7 +78,7 @@ def create_team_supervisor(llm: BaseChatModel, system_prompt, members):
         [
             ("system", system_prompt),
             MessagesPlaceholder(variable_name="messages"),
-            ("system", pstuts_rag.prompt_templates.SUPERVISOR_SYSTEM),
+            ("system", pstuts_rag.prompts.SUPERVISOR_SYSTEM),
         ]
     ).partial(options=str(options), team_members=", ".join(members))
     return (
