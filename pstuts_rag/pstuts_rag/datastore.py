@@ -1,9 +1,13 @@
 import asyncio
+import json
+import glob
+import aiofiles
 from pathlib import Path
 from typing import List, Dict, Iterator, Any
 import uuid
 
 
+import chainlit as cl
 from langchain_core.document_loaders import BaseLoader
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai.embeddings import OpenAIEmbeddings
@@ -15,10 +19,30 @@ from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
-from qdrant_client.models import VectorParams, Distance, PointStruct
+from qdrant_client.models import PointStruct
+
+from app import ApplicationState, params
 
 
 def batch(iterable: List[Any], size: int = 16) -> Iterator[List[Any]]:
+    """
+    Batch an iterable into chunks of specified size.
+
+    Yields successive chunks from the input iterable, each containing
+    at most 'size' elements. Useful for processing large collections
+    in manageable batches to avoid memory issues or API rate limits.
+
+    Args:
+        iterable (List[Any]): The input list to be batched
+        size (int, optional): Maximum size of each batch. Defaults to 16.
+
+    Yields:
+        List[Any]: Successive batches of the input iterable
+
+    Example:
+        >>> list(batch([1, 2, 3, 4, 5], 2))
+        [[1, 2], [3, 4], [5]]
+    """
     for i in range(0, len(iterable), size):
         yield iterable[i : i + size]
 
@@ -280,6 +304,24 @@ class DatastoreManager:
         self.docs = []
 
     async def populate_database(self, raw_docs: List[Dict[str, Any]]) -> int:
+        """
+        Populate the vector database with processed video transcript documents.
+
+        This method performs the complete pipeline: semantic chunking of transcripts,
+        embedding generation, and uploading to the Qdrant vector database. It processes
+        the raw video data through semantic chunking, generates embeddings in batches
+        for efficiency, and stores the results as vector points.
+
+        Args:
+            raw_docs (List[Dict[str, Any]]): List of raw video dictionaries containing
+                                           transcript data, metadata, and other fields
+
+        Returns:
+            int: Number of document chunks successfully uploaded to the database
+
+        Raises:
+            Exception: If embedding generation or database upload fails
+        """
 
         # perform chunking
         self.docs: List[Document] = await chunk_transcripts(
@@ -323,6 +365,16 @@ class DatastoreManager:
         return len(points)
 
     def count_docs(self) -> int:
+        """
+        Get the current number of documents stored in the vector database.
+
+        Returns:
+            int: Number of points/documents in the Qdrant collection,
+                 or 0 if collection doesn't exist or is empty
+
+        Note:
+            This method is safe to call even if the collection doesn't exist
+        """
         try:
             count = self.qdrant_client.get_collection(self.name).points_count
             return count if count else 0
@@ -356,15 +408,26 @@ def load_json_string(content: str, group: str):
     """
     Parse JSON string content and add group metadata to each video entry.
 
+    This utility function parses a JSON string containing video data and enhances
+    each video dictionary with a 'group' field for categorization purposes.
+
     Args:
-        content (str): JSON string containing a list of video objects
-        group (str): Group identifier to be added to each video entry
+        content (str): JSON string containing a list of video objects with
+                      transcript data and metadata
+        group (str): Group identifier to be added to each video entry,
+                    typically used for organizing videos by source or category
 
     Returns:
         List[Dict]: List of video dictionaries with added 'group' field
 
     Raises:
-        json.JSONDecodeError: If content is not valid JSON
+        json.JSONDecodeError: If content is not valid JSON format
+
+    Example:
+        >>> content = '[{"video_id": 1, "title": "Tutorial"}]'
+        >>> result = load_json_string(content, "python_tutorials")
+        >>> result[0]["group"]
+        'python_tutorials'
     """
     payload: List[Dict] = json.loads(content)
     [video.update({"group": group}) for video in payload]
@@ -375,16 +438,24 @@ async def load_single_json(filepath):
     """
     Asynchronously load and parse a single JSON file containing video data.
 
+    This function reads a JSON file asynchronously and processes it using
+    load_json_string, setting the group field to the filename for identification.
+
     Args:
-        filepath (str | Path): Path to the JSON file to load
+        filepath (str | Path): Path to the JSON file containing video transcript data.
+                              Can be a string path or Path object.
 
     Returns:
         List[Dict]: List of video dictionaries with group field set to filename
 
     Raises:
         FileNotFoundError: If the specified file doesn't exist
-        json.JSONDecodeError: If file content is not valid JSON
-        PermissionError: If file cannot be read due to permissions
+        json.JSONDecodeError: If file content is not valid JSON format
+        PermissionError: If file cannot be read due to insufficient permissions
+        UnicodeDecodeError: If file encoding is not UTF-8 compatible
+
+    Note:
+        Uses async file I/O for better performance when loading multiple files
     """
     my_path = Path(filepath)
 
@@ -399,20 +470,28 @@ async def load_json_files(path_pattern: List[str]):
     """
     Asynchronously load and parse multiple JSON files matching given patterns.
 
-    Uses glob patterns to find files and loads them concurrently for better performance.
-    All results are flattened into a single list.
+    Uses glob patterns to find files and loads them concurrently for optimal performance.
+    All results are flattened into a single list for unified processing. This function
+    is designed to handle large datasets efficiently by leveraging async I/O.
 
     Args:
-        path_pattern (List[str]): List of glob patterns to match JSON files
-                                 (supports recursive patterns with **)
+        path_pattern (List[str]): List of glob patterns to match JSON files.
+                                 Supports standard glob syntax including recursive
+                                 patterns with ** for subdirectory traversal.
 
     Returns:
-        List[Dict]: Flattened list of all video dictionaries from matched files
+        List[Dict]: Flattened list of all video dictionaries from matched files,
+                   with each video containing its source group information
 
     Raises:
         FileNotFoundError: If any matched file doesn't exist during loading
-        json.JSONDecodeError: If any file content is not valid JSON
+        json.JSONDecodeError: If any file content is not valid JSON format
         PermissionError: If any file cannot be read due to permissions
+
+    Example:
+        >>> patterns = ["data/*.json", "archive/**/*.json"]
+        >>> videos = await load_json_files(patterns)
+        >>> len(videos)  # Total videos from all matched files
     """
     files = []
     for f in path_pattern:
@@ -421,3 +500,41 @@ async def load_json_files(path_pattern: List[str]):
     tasks = [load_single_json(f) for f in files]
     results = await asyncio.gather(*tasks)
     return [item for sublist in results for item in sublist]  # flatten
+
+
+async def fill_the_db(
+    state: ApplicationState,
+):
+    """
+    Initialize and populate the vector database with video transcript data.
+
+    This function serves as the main entry point for database initialization.
+    It loads video data from configured file patterns, processes them through
+    the RAG pipeline, and provides user feedback about the loading process.
+
+    The function is designed to be idempotent - it can be called multiple times
+    safely and will only populate the database if it's empty.
+
+    Args:
+        state (ApplicationState): Application state object containing the RAG
+                                system and datastore manager for database operations
+
+    Returns:
+        None: Function operates through side effects (database population and UI updates)
+
+    Side Effects:
+        - Populates the vector database with processed video transcripts
+        - Sends confirmation message to the user interface
+        - Updates the state.rag.pointsLoaded counter
+
+    Note:
+        Uses the params.filename configuration to determine which files to load.
+        Sends a Chainlit message to inform users of successful database loading.
+    """
+    data: List[Dict[str, Any]] = await load_json_files(params.filename)
+
+    _ = await state.rag.build_chain(data)
+    await cl.Message(
+        content=f"✅ The database has been loaded with "
+        f"{state.rag.pointsLoaded} elements!"
+    ).send()
