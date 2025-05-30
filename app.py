@@ -21,7 +21,7 @@ from qdrant_client import QdrantClient
 from langchain_core.messages import HumanMessage, BaseMessage
 import langgraph.graph
 
-from pstuts_rag.agents import create_team_supervisor
+from pstuts_rag.graph import create_team_supervisor
 from pstuts_rag.graph import create_tavily_node
 
 import pstuts_rag.datastore
