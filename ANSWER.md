@@ -37,7 +37,7 @@ Marko Budisic
 
 ## Task 1: Defining your Problem and Audience
 
-**Problem:** Navigating extensive libraries of video materials to find specific information is often a time-consuming and inefficient process for users. This challenge is common in organizations that rely on video-based training materials. 😓
+**Problem:** In large orgs with legacy video archives, navigating extensive libraries of video materials to find specific information and build reports and materials based on them is a time-consuming and inefficient process. 😓
 
 **Users and their Problem:** 🏢 Companies often have extensive video tutorial libraries for proprietary software. Employees (new hires, support, experienced users) struggle to quickly find specific instructions within these videos. 🎯 Like Photoshop learners needing a specific technique, employees need a fast way to query video content, saving time and boosting learning. 🚀
 

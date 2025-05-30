@@ -1,9 +1,8 @@
-from typing import Any, Callable, List, Optional, TypedDict, Union, Annotated
-import operator
+from typing import Any, Callable, Optional, Union
 from langchain.agents import AgentExecutor, create_openai_functions_agent
 from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
@@ -11,12 +10,7 @@ from langchain_core.language_models import BaseChatModel
 
 from langgraph.graph import END, StateGraph
 import pstuts_rag.prompt_templates
-
-
-class PsTutsTeamState(TypedDict):
-    messages: Annotated[List[BaseMessage], operator.add]
-    team_members: List[str]
-    next: str
+from pstuts_rag.state import PsTutsTeamState
 
 
 def agent_node(
