@@ -1,8 +1,10 @@
+import functools
 import json
 import asyncio
 from operator import itemgetter
 from typing import Any, Dict, Union, Optional, Callable
 import logging
+import re
 
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.messages import AIMessage
@@ -11,6 +13,7 @@ from langchain_core.runnables import (
     RunnableParallel,
     RunnablePassthrough,
     RunnableConfig,
+    RunnableLambda,
 )
 from langchain_openai import ChatOpenAI
 from langchain_huggingface import ChatHuggingFace
@@ -22,7 +25,9 @@ from pstuts_rag.utils import ChatAPISelector
 from pstuts_rag.configuration import Configuration, ModelAPI
 
 
-def pack_references(msg_dict: Dict[str, Any]) -> AIMessage:
+def post_process_response(
+    msg_dict: Dict[str, Any], config: RunnableConfig
+) -> AIMessage:
     """Pack reference information into the AI message.
 
     Takes the generated answer and input context, formats references,
@@ -34,6 +39,9 @@ def pack_references(msg_dict: Dict[str, Any]) -> AIMessage:
     Returns:
         AIMessage: Message with references appended
     """
+
+    configurable = Configuration.from_runnable_config(config)
+
     answer: AIMessage = msg_dict["answer"]
     input = msg_dict["input"]
 
@@ -44,7 +52,11 @@ def pack_references(msg_dict: Dict[str, Any]) -> AIMessage:
     ]
     references = str(json.dumps(reference_dicts, indent=2))
 
-    text_w_references = answer.content
+    text_w_references = (
+        strip_think_tags(str(answer.content))
+        if configurable.eva_strip_think
+        else answer.content
+    )
     # Only append references if the model provided a substantive answer
     if "I don't know" not in answer.content:
         text_w_references = "\n".join(
@@ -64,6 +76,28 @@ def pack_references(msg_dict: Dict[str, Any]) -> AIMessage:
     )
 
     return output
+
+
+def strip_think_tags(input: str) -> str:
+    """Removes everything between <think> and </think> tags (including tags)
+    from the input string. If only <think> is present, it removes everything
+    after it (including it.)
+
+    Args:
+        input (str): The input string potentially containing think tags
+
+    Returns:
+        str: The string with think tags and their content removed
+    """
+    # First, try to remove complete <think>...</think> blocks
+    # Use non-greedy matching to handle multiple blocks correctly
+    result = re.sub(r"<think>.*?</think>", "", input, flags=re.DOTALL)
+
+    # Then, handle case where only opening <think> tag exists
+    # Remove everything from <think> to the end of the string
+    result = re.sub(r"<think>.*$", "", result, flags=re.DOTALL)
+
+    return result
 
 
 def create_transcript_rag_chain(
@@ -119,7 +153,9 @@ def create_transcript_rag_chain(
             "input": RunnablePassthrough(),  # Contains both context and question
             "answer": answer_chain,  # Generate answer using retrieved context
         }
-        | pack_references  # Add reference metadata to the final response
+        | RunnableLambda(
+            post_process_response
+        )  # wrapping in runnable Lambda to pass config
     )
 
     return rag_chain

@@ -45,6 +45,8 @@ class Configuration:
         )
     )
 
+    eva_strip_think: bool = "EVA_STRIP_THINK" in os.environ
+
     embedding_api: ModelAPI = ModelAPI(
         os.environ.get("EMBEDDING_API", ModelAPI.HUGGINGFACE.value)
     )
