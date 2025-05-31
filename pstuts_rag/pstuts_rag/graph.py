@@ -8,7 +8,8 @@ from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import Runnable, RunnableLambda
 
-from langgraph.graph import StateGraph
+from langchain_openai import ChatOpenAI
+from langgraph.graph import StateGraph, START, END
 
 from pstuts_rag.prompts import SUPERVISOR_SYSTEM, TAVILY_SYSTEM
 from pstuts_rag.state import PsTutsTeamState
@@ -21,6 +22,7 @@ import logging
 from typing import Callable, Dict, Tuple, Optional, Union
 
 from langchain_huggingface import HuggingFaceEmbeddings
+from pstuts_rag.utils import ChatAPISelector
 
 from app import (
     ADOBEHELP,
@@ -116,8 +118,7 @@ def create_agent(
 
 
 def create_tavily_node(
-    llm: BaseChatModel, name: str = "AdobeHelp"
-) -> Tuple[Callable, AgentExecutor, TavilySearchResults]:
+     name: str = "AdobeHelp", config: Configuration = Configuration() ) -> Callable
     """Initialize tool, agent, and node for Tavily search of helpx.adobe.com.
 
     This function sets up a search agent that can query Adobe Photoshop help topics
@@ -133,6 +134,10 @@ def create_tavily_node(
             - The configured agent executor
             - The Tavily search tool instance
     """
+    
+    cls = ChatAPISelector.get(config.llm_api, ChatOpenAI)
+    llm = cls(model=config.llm_tool_model)
+
 
     adobe_help_search = TavilySearchResults(
         max_results=5, include_domains=["helpx.adobe.com"]
@@ -147,7 +152,11 @@ def create_tavily_node(
     return adobe_help_node
 
 
-def create_team_supervisor(llm: BaseChatModel, system_prompt, members):
+def create_team_supervisor(
+    system_prompt,
+    members,
+    config: Configuration = Configuration(),
+):
     """An LLM-based router."""
     options = ["FINISH"] + members
     function_def = {
@@ -167,6 +176,10 @@ def create_team_supervisor(llm: BaseChatModel, system_prompt, members):
             "required": ["next"],
         },
     }
+
+    cls = ChatAPISelector.get(config.llm_api, ChatOpenAI)
+    llm = cls(model=config.llm_tool_model)
+
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", system_prompt),
@@ -176,60 +189,27 @@ def create_team_supervisor(llm: BaseChatModel, system_prompt, members):
     ).partial(options=str(options), team_members=", ".join(members))
     return (
         prompt
-        | llm.bind_functions(functions=[function_def], function_call="route")
+        | llm.bind_tools(
+            tools=[function_def],
+            tool_choice={"type": "function", "function": {"name": "route"}},
+        )
         | JsonOutputFunctionsParser()
     )
 
 
-async def startup(
-    config=Configuration(), on_loading_complete: Optional[Callable] = None
-):
-    """
-    Initialize the application with optional loading completion callback.
+def initialize_datastore(callback: Optional[Callable] = None):
 
-    Args:
-        config: Configuration object with application settings
-        on_loading_complete: Optional callback (sync or async) to call when
-                           datastore loading completes
-
-    Returns:
-        DatastoreManager: The initialized datastore manager
-    """
-
-    ### PROCESS THE CONFIGURATION
-    log_level = getattr(logging, config.eva_log_level, logging.INFO)
-    logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
-
-    ### CREATE THE DATABASE
-
-    datastore = DatastoreManager(
-        name=config.eva_workflow_name,
-        embeddings=HuggingFaceEmbeddings(model_name=config.embedding_model),
+    datastore = DatastoreManager()
+    if callback:
+        datastore.add_completion_callback(callback)
+    asyncio.create_task(
+        datastore.from_json_globs(Configuration().transcript_glob)
     )
-
-    ### START DATABASE POPULATION
-
-    globs = [str(g) for g in config.transcript_glob.split(":")]
-
-    # Add custom callback if provided, otherwise use default logging
-    if on_loading_complete:
-        datastore.add_completion_callback(on_loading_complete)
-    else:
-        # Default callback for logging
-        def default_logging_callback():
-            logging.info("🎉 Datastore loading completed!")
-
-        datastore.add_completion_callback(default_logging_callback)
-
-    asyncio.create_task(datastore.from_json_globs(globs))
-
-    ### CREATE THE RAG CHAIN
-    ai_graph = StateGraph(PsTutsTeamState, config_schema=Configuration)
 
     return datastore
 
 
-async def build_the_graph(current_state: ApplicationState):
+async def build_the_graph(datastore: DatastoreManager, config:Configuration=Configuration()):
     """
     Builds the agent graph for routing user queries.
 
@@ -239,33 +219,24 @@ async def build_the_graph(current_state: ApplicationState):
     Args:
         current_state: Current application state with required components
     """
-    adobe_help_node, _, _ = create_tavily_node(
-        llm=app_state.llm, name=ADOBEHELP
-    )
 
-    rag_node, _ = create_rag_node(
-        rag_chain=create_transcript_rag_chain(),
-        name=VIDEOARCHIVE,
-    )
+    adobe_help_node = create_tavily_node(name=ADOBEHELP, config=config)
+
+    rag_node = create_transcript_rag_chain(datastore, config=config)
 
     supervisor_agent = create_team_supervisor(
-        current_state.llm,
         SUPERVISOR_SYSTEM,
-        [VIDEOARCHIVE, ADOBEHELP],
+        [VIDEOARCHIVE, ADOBEHELP], config=config
     )
 
-    ai_graph = langgraph.graph.StateGraph(PsTutsTeamState)
+    ai_graph = StateGraph(PsTutsTeamState, config_schema=Configuration)
 
     ai_graph.add_node(VIDEOARCHIVE, rag_node)
     ai_graph.add_node(ADOBEHELP, adobe_help_node)
     ai_graph.add_node("supervisor", supervisor_agent)
 
-    edges = [
-        [VIDEOARCHIVE, "supervisor"],
-        [ADOBEHELP, "supervisor"],
-    ]
-
-    [ai_graph.add_edge(*p) for p in edges]
+    ai_graph.add_edge(VIDEOARCHIVE, "supervisor")
+    ai_graph.add_edge(ADOBEHELP, "supervisor")
 
     ai_graph.add_conditional_edges(
         "supervisor",
@@ -273,7 +244,7 @@ async def build_the_graph(current_state: ApplicationState):
         {
             VIDEOARCHIVE: VIDEOARCHIVE,
             ADOBEHELP: ADOBEHELP,
-            "FINISH": langgraph.graph.END,
+            "FINISH": END,
         },
     )
 
@@ -283,4 +254,5 @@ async def build_the_graph(current_state: ApplicationState):
 
 
 # Note: Cannot run build_the_graph() here as it requires current_state parameter
-# graph, _ = asyncio.run(build_the_graph())
+db = initialize_datastore(lambda _ : logging.info("Database initialized"))
+graph = asyncio.run( build_the_graph(db) )
