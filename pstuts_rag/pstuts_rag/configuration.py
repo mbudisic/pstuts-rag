@@ -1,8 +1,18 @@
 import os
+import logging
 from dataclasses import dataclass, fields
 from typing import Any, Optional
+from enum import Enum
 
 from langchain_core.runnables import RunnableConfig
+
+
+class ModelAPI(Enum):
+    """Enum for supported embedding API providers."""
+
+    OPENAI = "OPENAI"
+    HUGGINGFACE = "HUGGINGFACE"
+    OLLAMA = "OLLAMA"
 
 
 @dataclass(kw_only=True)
@@ -13,6 +23,7 @@ class Configuration:
     Attributes:
         transcript_glob: Glob pattern for transcript JSON files (supports multiple files separated by ':')
         embedding_model: Name of the embedding model to use (default: custom fine-tuned snowflake model)
+        embedding_api: API provider for embeddings (OPENAI or HUGGINGFACE)
         max_research_loops: Maximum number of research loops to perform
         llm_tool_model: Name of the LLM model to use for tool calling
         n_context_docs: Number of context documents to retrieve for RAG
@@ -34,9 +45,19 @@ class Configuration:
         )
     )
 
+    embedding_api: ModelAPI = ModelAPI(
+        os.environ.get("EMBEDDING_API", ModelAPI.HUGGINGFACE.value)
+    )
+
+    llm_api: ModelAPI = ModelAPI(
+        os.environ.get("LLM_API", ModelAPI.OPENAI.value)
+    )
+
     max_research_loops: int = int(os.environ.get("MAX_RESEARCH_LOOPS", "3"))
 
-    llm_tool_model: str = str(os.environ.get("LLM_TOOL_MODEL", "gpt-4.1-mini"))
+    llm_tool_model: str = str(
+        os.environ.get("LLM_TOOL_MODEL", "smollm2:1.7b-instruct-q2_K")
+    )
     n_context_docs: int = int(os.environ.get("N_CONTEXT_DOCS", "2"))
 
     @classmethod
@@ -55,3 +76,11 @@ class Configuration:
             if f.init
         }
         return cls(**{k: v for k, v in values.items() if v})
+
+    def print(self, print_like_function=logging.info) -> None:
+        """Log all configuration parameters using logging.debug."""
+        print_like_function("Configuration parameters:")
+        for field in fields(self):
+            if field.init:
+                value = getattr(self, field.name)
+                print_like_function("  %s: %s", field.name, value)

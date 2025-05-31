@@ -1,11 +1,13 @@
 from pstuts_rag.configuration import Configuration
+from pstuts_rag.datastore import fill_the_db
+from pstuts_rag.graph import build_the_graph
 from pstuts_rag.state import PsTutsTeamState
 import requests
 import asyncio
 import json
 import os
 import getpass
-from typing import Any, Dict, List, Tuple
+from typing import List, Tuple
 import re
 
 import chainlit as cl
@@ -15,27 +17,20 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
 from langchain_core.embeddings import Embeddings
-from langchain_qdrant import QdrantVectorStore
-from qdrant_client import QdrantClient
+from langchain_huggingface import HuggingFaceEmbeddings
+
 
 from langchain_core.messages import HumanMessage, BaseMessage
 import langgraph.graph
 
-from pstuts_rag.graph import create_team_supervisor
-from pstuts_rag.graph import create_tavily_node
 
 import pstuts_rag.datastore
 import pstuts_rag.rag
 
-from pstuts_rag.graph import create_rag_node
-
-from pstuts_rag.datastore import load_json_files
-from pstuts_rag.prompts import SUPERVISOR_SYSTEM
 
 import nest_asyncio
 from uuid import uuid4
 
-from sentence_transformers import SentenceTransformer
 import logging
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -70,7 +65,7 @@ class ApplicationState:
     Maintains the state of the application and its components.
 
     Attributes:
-        embeddings: OpenAI embeddings model for vector operations
+        embeddings: Embeddings model for vector operations
         docs: List of loaded documents
         qdrant_client: Client for Qdrant vector database
         vector_store: Vector store for document retrieval
@@ -87,15 +82,15 @@ class ApplicationState:
 
     embeddings: Embeddings = None
     docs: List[Document] = []
-    qdrant_client: QdrantClient = None
-    vector_store: QdrantVectorStore = None
-    datastore_manager: pstuts_rag.datastore.DatastoreManager
-    rag: pstuts_rag.rag.RAGChainInstance
-    llm: BaseChatModel
-    rag_chain: Runnable
+    qdrant_client = None
+    vector_store = None
+    datastore_manager = None
+    rag = None
+    llm: BaseChatModel = None
+    rag_chain: Runnable = None
 
-    ai_graph: Runnable
-    ai_graph_sketch: langgraph.graph.StateGraph
+    ai_graph: Runnable = None
+    ai_graph_sketch = None
 
     tasks: List[asyncio.Task] = []
 
@@ -126,83 +121,12 @@ ai_state = PsTutsTeamState(
 )
 
 
-async def fill_the_db(
-    state: ApplicationState,
-):
-    """
-    Populates the vector database with document data if it's empty.
-
-    Args:
-        state: Application state containing the datastore manager
-
-    Returns:
-        0 if database already has documents, otherwise None
-    """
-    data: List[Dict[str, Any]] = await load_json_files(params.filename)
-
-    _ = await state.rag.build_chain(data)
-    await cl.Message(
-        content=f"✅ The database has been loaded with {state.rag.pointsLoaded} elements!"
-    ).send()
-
-
-async def build_the_graph(current_state: ApplicationState):
-    """
-    Builds the agent graph for routing user queries.
-
-    Creates the necessary nodes (Adobe help, RAG search, supervisor), defines their
-    connections, and compiles the graph into a runnable chain.
-
-    Args:
-        current_state: Current application state with required components
-    """
-    adobe_help_node, _, _ = create_tavily_node(
-        llm=app_state.llm, name=ADOBEHELP
-    )
-
-    rag_node, _ = create_rag_node(
-        rag_chain=current_state.rag.rag_chain,
-        name=VIDEOARCHIVE,
-    )
-
-    supervisor_agent = create_team_supervisor(
-        current_state.llm,
-        SUPERVISOR_SYSTEM,
-        [VIDEOARCHIVE, ADOBEHELP],
-    )
-
-    ai_graph = langgraph.graph.StateGraph(PsTutsTeamState)
-
-    ai_graph.add_node(VIDEOARCHIVE, rag_node)
-    ai_graph.add_node(ADOBEHELP, adobe_help_node)
-    ai_graph.add_node("supervisor", supervisor_agent)
-
-    edges = [
-        [VIDEOARCHIVE, "supervisor"],
-        [ADOBEHELP, "supervisor"],
-    ]
-
-    [ai_graph.add_edge(*p) for p in edges]
-
-    ai_graph.add_conditional_edges(
-        "supervisor",
-        lambda x: x["next"],
-        {
-            VIDEOARCHIVE: VIDEOARCHIVE,
-            ADOBEHELP: ADOBEHELP,
-            "FINISH": langgraph.graph.END,
-        },
-    )
-
-    ai_graph.set_entry_point("supervisor")
-    app_state.ai_graph_sketch = ai_graph
-    app_state.ai_graph = enter_chain | ai_graph.compile()
-
-
 async def initialize():
 
     await fill_the_db(app_state)
-    await build_the_graph(app_state)
+    app_state.ai_graph, app_state.ai_graph_sketch = await build_the_graph(
+        app_state
+    )
 
 
 def enter_chain(message: str):
@@ -233,8 +157,10 @@ async def on_chat_start():
     for database population and graph building.
     """
     app_state.llm = ChatOpenAI(model=params.tool_calling_model, temperature=0)
-    app_state.qdrant_client = QdrantClient(":memory:")
-    app_state.embeddings = SentenceTransformer(params.embedding_model)
+    # Use LangChain's built-in HuggingFaceEmbeddings wrapper
+    app_state.embeddings = HuggingFaceEmbeddings(
+        model_name=params.embedding_model
+    )
 
     app_state.rag = pstuts_rag.rag.RAGChainInstance(
         name="deployed",

@@ -7,12 +7,30 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import Runnable, RunnableLambda
-from pstuts_rag.prompts import TAVILY_SYSTEM
+
+from langgraph.graph import StateGraph
+
+from pstuts_rag.prompts import SUPERVISOR_SYSTEM, TAVILY_SYSTEM
 from pstuts_rag.state import PsTutsTeamState
+from pstuts_rag.datastore import DatastoreManager
+from pstuts_rag.configuration import Configuration
 
-
+import asyncio
+import functools
 import logging
-from typing import Callable, Dict, Tuple
+from typing import Callable, Dict, Tuple, Optional, Union
+
+from langchain_huggingface import HuggingFaceEmbeddings
+
+from app import (
+    ADOBEHELP,
+    VIDEOARCHIVE,
+    ApplicationState,
+    app_state,
+    enter_chain,
+)
+
+from pstuts_rag.rag_for_transcripts import retrieve_videos
 
 
 def search_agent(state: PsTutsTeamState, chain: Runnable) -> Dict:
@@ -75,7 +93,7 @@ def create_rag_node(rag_chain: Runnable, name: str = "VideoSearch"):
         name=name,
     )
 
-    return rag_node, lambda q: {"result": rag_chain.invoke({"question": q})}
+    return rag_node
 
 
 def create_agent(
@@ -126,7 +144,7 @@ def create_tavily_node(
         agent_node, agent=adobe_help_agent, name=name
     )
 
-    return adobe_help_node, adobe_help_agent, adobe_help_search
+    return adobe_help_node
 
 
 def create_team_supervisor(llm: BaseChatModel, system_prompt, members):
@@ -161,3 +179,108 @@ def create_team_supervisor(llm: BaseChatModel, system_prompt, members):
         | llm.bind_functions(functions=[function_def], function_call="route")
         | JsonOutputFunctionsParser()
     )
+
+
+async def startup(
+    config=Configuration(), on_loading_complete: Optional[Callable] = None
+):
+    """
+    Initialize the application with optional loading completion callback.
+
+    Args:
+        config: Configuration object with application settings
+        on_loading_complete: Optional callback (sync or async) to call when
+                           datastore loading completes
+
+    Returns:
+        DatastoreManager: The initialized datastore manager
+    """
+
+    ### PROCESS THE CONFIGURATION
+    log_level = getattr(logging, config.eva_log_level, logging.INFO)
+    logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
+
+    ### CREATE THE DATABASE
+
+    datastore = DatastoreManager(
+        name=config.eva_workflow_name,
+        embeddings=HuggingFaceEmbeddings(model_name=config.embedding_model),
+    )
+
+    ### START DATABASE POPULATION
+
+    globs = [str(g) for g in config.transcript_glob.split(":")]
+
+    # Add custom callback if provided, otherwise use default logging
+    if on_loading_complete:
+        datastore.add_completion_callback(on_loading_complete)
+    else:
+        # Default callback for logging
+        def default_logging_callback():
+            logging.info("🎉 Datastore loading completed!")
+
+        datastore.add_completion_callback(default_logging_callback)
+
+    asyncio.create_task(datastore.from_json_globs(globs))
+
+    ### CREATE THE RAG CHAIN
+    ai_graph = StateGraph(PsTutsTeamState, config_schema=Configuration)
+
+    return datastore
+
+
+async def build_the_graph(current_state: ApplicationState):
+    """
+    Builds the agent graph for routing user queries.
+
+    Creates the necessary nodes (Adobe help, RAG search, supervisor), defines their
+    connections, and compiles the graph into a runnable chain.
+
+    Args:
+        current_state: Current application state with required components
+    """
+    adobe_help_node, _, _ = create_tavily_node(
+        llm=app_state.llm, name=ADOBEHELP
+    )
+
+    rag_node, _ = create_rag_node(
+        rag_chain=retrieve_videos(),
+        name=VIDEOARCHIVE,
+    )
+
+    supervisor_agent = create_team_supervisor(
+        current_state.llm,
+        SUPERVISOR_SYSTEM,
+        [VIDEOARCHIVE, ADOBEHELP],
+    )
+
+    ai_graph = langgraph.graph.StateGraph(PsTutsTeamState)
+
+    ai_graph.add_node(VIDEOARCHIVE, rag_node)
+    ai_graph.add_node(ADOBEHELP, adobe_help_node)
+    ai_graph.add_node("supervisor", supervisor_agent)
+
+    edges = [
+        [VIDEOARCHIVE, "supervisor"],
+        [ADOBEHELP, "supervisor"],
+    ]
+
+    [ai_graph.add_edge(*p) for p in edges]
+
+    ai_graph.add_conditional_edges(
+        "supervisor",
+        lambda x: x["next"],
+        {
+            VIDEOARCHIVE: VIDEOARCHIVE,
+            ADOBEHELP: ADOBEHELP,
+            "FINISH": langgraph.graph.END,
+        },
+    )
+
+    ai_graph.set_entry_point("supervisor")
+
+    return enter_chain | ai_graph.compile(), ai_graph
+
+
+# Note: Cannot run build_the_graph() here as it requires current_state parameter
+# graph, _ = asyncio.run(build_the_graph())

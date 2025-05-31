@@ -3,25 +3,28 @@ import json
 import glob
 import aiofiles
 from pathlib import Path
-from typing import List, Dict, Iterator, Any
+from typing import List, Dict, Iterator, Any, Callable, Optional
 import uuid
-
+import logging
 
 import chainlit as cl
 from langchain_core.document_loaders import BaseLoader
 from langchain_experimental.text_splitter import SemanticChunker
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai.embeddings import OpenAIEmbeddings
+from langchain_ollama.embeddings import OllamaEmbeddings
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
 from langchain_core.vectorstores import VectorStoreRetriever
 
 from langchain_qdrant import QdrantVectorStore
+from pstuts_rag.configuration import Configuration, ModelAPI
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 from qdrant_client.models import PointStruct
 
-from app import ApplicationState, params
+from pstuts_rag.utils import EmbeddingsAPISelector
 
 
 def batch(iterable: List[Any], size: int = 16) -> Iterator[List[Any]]:
@@ -201,13 +204,6 @@ async def chunk_transcripts(
     for group in docs_group:
         docs_chunks_semantic.extend(group)
 
-    # locate individual sections of the original transcript
-    # with the semantic chunks
-    def is_subchunk(a: Document, ofb: Document) -> bool:
-        return (a.metadata["video_id"] == ofb.metadata["video_id"]) and (
-            a.page_content in ofb.page_content
-        )
-
     # Create a lookup dictionary for faster access
     video_id_to_chunks: Dict[int, List[Document]] = {}
     for chunk in docs_chunks_verbatim:
@@ -256,6 +252,8 @@ class DatastoreManager:
         qdrant_client: Client for Qdrant vector database
         name: Unique identifier for this retriever instance
         vector_store: The Qdrant vector store instance
+        loading_complete: AsyncIO event that's set when data loading completes
+        _completion_callbacks: List of callbacks to call when loading completes
     """
 
     embeddings: Embeddings
@@ -264,14 +262,17 @@ class DatastoreManager:
     name: str
     vector_store: QdrantVectorStore
     dimensions: int
+    loading_complete: asyncio.Event
+    _completion_callbacks: List[Callable]
+
+    config: Optional[Configuration]
 
     def __init__(
         self,
-        embeddings: Embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-small"
-        ),
+        embeddings: Optional[Embeddings] = None,
         qdrant_client: QdrantClient = QdrantClient(location=":memory:"),
         name: str = str(object=uuid.uuid4()),
+        config: Configuration = Configuration(),
     ) -> None:
         """Initialize the RetrieverFactory.
 
@@ -280,12 +281,23 @@ class DatastoreManager:
             qdrant_client: Qdrant client for vector database operations
             name: Unique identifier for this retriever instance
         """
-        self.embeddings = embeddings
-        self.name = name
+
+        if embeddings is None:
+
+            cls = EmbeddingsAPISelector.get(
+                config.embedding_api, HuggingFaceEmbeddings
+            )
+            self.embeddings = cls(model=config.embedding_model)
+        else:
+            self.embeddings = embeddings
+
+        self.name = name if name else config.eva_workflow_name
         self.qdrant_client = qdrant_client
+        self.loading_complete = asyncio.Event()
+        self._completion_callbacks = []
 
         # determine embedding dimension
-        self.dimensions = len(embeddings.embed_query("test"))
+        self.dimensions = len(self.embeddings.embed_query("test"))
 
         self.qdrant_client.recreate_collection(
             collection_name=self.name,
@@ -298,10 +310,20 @@ class DatastoreManager:
         self.vector_store = QdrantVectorStore(
             client=self.qdrant_client,
             collection_name=self.name,
-            embedding=embeddings,
+            embedding=self.embeddings,
         )
 
         self.docs = []
+
+    async def from_json_globs(self, globs: List[str]) -> int:
+
+        logging.debug("Starting to load files.")
+        data = await load_json_files(globs)
+        logging.debug("Received %d JSON files.", len(data))
+        count = await self.populate_database(data)
+        logging.debug("Uploaded %d records.", count)
+
+        return count
 
     async def populate_database(self, raw_docs: List[Dict[str, Any]]) -> int:
         """
@@ -362,6 +384,14 @@ class DatastoreManager:
             points=points,
         )
 
+        self.loading_complete.set()
+        # Execute callbacks (both sync and async)
+        for callback in self._completion_callbacks:
+            if asyncio.iscoroutinefunction(callback):
+                await callback()
+            else:
+                callback()
+
         return len(points)
 
     def count_docs(self) -> int:
@@ -403,38 +433,53 @@ class DatastoreManager:
             search_kwargs={"k": n_context_docs}
         )
 
+    def is_ready(self) -> bool:
+        """Check if the datastore has finished loading data.
 
-def load_json_string(content: str, group: str):
-    """
-    Parse JSON string content and add group metadata to each video entry.
+        Returns:
+            bool: True if data loading is complete, False otherwise
+        """
+        return self.loading_complete.is_set()
 
-    This utility function parses a JSON string containing video data and enhances
-    each video dictionary with a 'group' field for categorization purposes.
+    def add_completion_callback(self, callback: Callable):
+        """Add a callback to be called when data loading completes.
 
-    Args:
-        content (str): JSON string containing a list of video objects with
-                      transcript data and metadata
-        group (str): Group identifier to be added to each video entry,
-                    typically used for organizing videos by source or category
+        Args:
+            callback: Callable function to be called when data loading completes
 
-    Returns:
-        List[Dict]: List of video dictionaries with added 'group' field
+        Note:
+            If loading has already completed, the callback will be called immediately.
+        """
+        if self.loading_complete.is_set():
+            # Loading already completed, execute callback immediately
+            if asyncio.iscoroutinefunction(callback):
+                # Need to schedule async callback
+                asyncio.create_task(callback())
+            else:
+                callback()
+        else:
+            # Loading not complete, add to callbacks list
+            self._completion_callbacks.append(callback)
 
-    Raises:
-        json.JSONDecodeError: If content is not valid JSON format
+    async def wait_for_loading(self, timeout: Optional[float] = None):
+        """Wait for data loading to complete.
 
-    Example:
-        >>> content = '[{"video_id": 1, "title": "Tutorial"}]'
-        >>> result = load_json_string(content, "python_tutorials")
-        >>> result[0]["group"]
-        'python_tutorials'
-    """
-    payload: List[Dict] = json.loads(content)
-    [video.update({"group": group}) for video in payload]
-    return payload
+        Args:
+            timeout: Maximum time to wait in seconds (None for no timeout)
+
+        Returns:
+            bool: True if loading completed, False if timeout occurred
+        """
+        try:
+            await asyncio.wait_for(
+                self.loading_complete.wait(), timeout=timeout
+            )
+            return True
+        except asyncio.TimeoutError:
+            return False
 
 
-async def load_single_json(filepath):
+async def load_single_json(filepath: str):
     """
     Asynchronously load and parse a single JSON file containing video data.
 
@@ -461,12 +506,13 @@ async def load_single_json(filepath):
 
     async with aiofiles.open(my_path, mode="r", encoding="utf-8") as f:
         content = await f.read()
-        payload = load_json_string(content, my_path.name)
-
+        payload = json.loads(content)
+        for entry in payload:
+            entry.update({"group": str(my_path)})
     return payload
 
 
-async def load_json_files(path_pattern: List[str]):
+async def load_json_files(glob_list: List[str]):
     """
     Asynchronously load and parse multiple JSON files matching given patterns.
 
@@ -475,7 +521,7 @@ async def load_json_files(path_pattern: List[str]):
     is designed to handle large datasets efficiently by leveraging async I/O.
 
     Args:
-        path_pattern (List[str]): List of glob patterns to match JSON files.
+        glob_list (List[str]): List of glob patterns to match JSON files.
                                  Supports standard glob syntax including recursive
                                  patterns with ** for subdirectory traversal.
 
@@ -493,48 +539,16 @@ async def load_json_files(path_pattern: List[str]):
         >>> videos = await load_json_files(patterns)
         >>> len(videos)  # Total videos from all matched files
     """
+    logging.debug("Loading from %d globs:", len(glob_list))
+
     files = []
-    for f in path_pattern:
-        (files.extend(glob.glob(f, recursive=True)))
+    for globstring in glob_list:
+        logging.debug("Loading glob: %s", globstring)
+        new_files = glob.glob(globstring, recursive=True)
+        logging.debug("New files: %d", len(new_files))
+        files.extend(new_files)
+    logging.debug("Total files: %d", len(files))
 
     tasks = [load_single_json(f) for f in files]
     results = await asyncio.gather(*tasks)
     return [item for sublist in results for item in sublist]  # flatten
-
-
-async def fill_the_db(
-    state: ApplicationState,
-):
-    """
-    Initialize and populate the vector database with video transcript data.
-
-    This function serves as the main entry point for database initialization.
-    It loads video data from configured file patterns, processes them through
-    the RAG pipeline, and provides user feedback about the loading process.
-
-    The function is designed to be idempotent - it can be called multiple times
-    safely and will only populate the database if it's empty.
-
-    Args:
-        state (ApplicationState): Application state object containing the RAG
-                                system and datastore manager for database operations
-
-    Returns:
-        None: Function operates through side effects (database population and UI updates)
-
-    Side Effects:
-        - Populates the vector database with processed video transcripts
-        - Sends confirmation message to the user interface
-        - Updates the state.rag.pointsLoaded counter
-
-    Note:
-        Uses the params.filename configuration to determine which files to load.
-        Sends a Chainlit message to inform users of successful database loading.
-    """
-    data: List[Dict[str, Any]] = await load_json_files(params.filename)
-
-    _ = await state.rag.build_chain(data)
-    await cl.Message(
-        content=f"✅ The database has been loaded with "
-        f"{state.rag.pointsLoaded} elements!"
-    ).send()

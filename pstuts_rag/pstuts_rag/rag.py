@@ -32,6 +32,7 @@ from .prompts import RAG_PROMPT_TEMPLATES
 
 from .datastore import DatastoreManager
 
+from pstuts_rag.configuration import Configuration
 
 class RAGChainFactory:
     """Factory class for creating RAG (Retrieval Augmented Generation) chains.
@@ -164,10 +165,11 @@ class RAGChainFactory:
 
         Returns:
             Runnable: The complete RAG chain
+            
         """
         self.answer_chain = self.prompt_template | llm
         self.rag_chain = (
-            self.format_query
+            itemgetter("question")
             | self.prepare_query
             | {"input": RunnablePassthrough(), "answer": self.answer_chain}
             | self.pack_references
@@ -226,7 +228,7 @@ class RAGChainInstance:
         self.llm = llm
         self.embeddings = embeddings
 
-    async def build_chain(
+    async def build_chain()
         self, json_payload: List[Dict[str, Any]]
     ) -> Runnable:
         """
@@ -259,3 +261,5 @@ class RAGChainInstance:
         )
         self.rag_chain = self.rag_factory.get_rag_chain(self.llm)
         return self.rag_chain
+
+

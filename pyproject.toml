@@ -45,6 +45,9 @@ dependencies = [
     "google>=3.0.0",
     "numpy==2.2.2",
     "tavily-python>=0.7.2",
+    "logging>=0.4.9.6",
+    "langchain-ollama>=0.3.2",
+    "simsimd>=6.2.1",
 ]
 authors = [{ name = "Marko Budisic", email = "mbudisic@gmail.com" }]
 license = "MIT"
