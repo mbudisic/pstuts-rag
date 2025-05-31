@@ -1,4 +1,4 @@
-from typing import Dict, Type
+from typing import Dict, List, Type, Any, Iterator
 
 from langchain_openai import ChatOpenAI
 from langchain_openai.embeddings import OpenAIEmbeddings
@@ -90,3 +90,54 @@ EmbeddingsAPISelector: Dict[
     ModelAPI.OPENAI: OpenAIEmbeddings,
     ModelAPI.OLLAMA: OllamaEmbeddings,
 }
+
+
+def flatten(lst: List[Any]):
+    """
+    Recursively flatten a nested list structure into a single-level generator.
+
+    Takes a list that may contain nested lists and yields all elements
+    in a flat sequence. Uses recursive generators to handle arbitrary
+    nesting depth efficiently.
+
+    Args:
+        lst (List[Any]): The input list which may contain nested lists
+
+    Yields:
+        Any: Individual elements from the flattened list structure
+
+    Example:
+        >>> list(flatten([1, [2, 3], [4, [5, 6]]]))
+        [1, 2, 3, 4, 5, 6]
+
+        >>> list(flatten(['a', ['b', 'c'], 'd']))
+        ['a', 'b', 'c', 'd']
+    """
+    for item in lst:
+        if isinstance(item, list):
+            yield from flatten(item)
+        else:
+            yield item
+
+
+def batch(iterable: List[Any], size: int = 16) -> Iterator[List[Any]]:
+    """
+    Batch an iterable into chunks of specified size.
+
+    Yields successive chunks from the input iterable, each containing
+    at most 'size' elements. Useful for processing large collections
+    in manageable batches to avoid memory issues or API rate limits.
+
+    Args:
+        iterable (List[Any]): The input list to be batched
+        size (int, optional): Maximum size of each batch. Defaults to 16.
+
+    Yields:
+        List[Any]: Successive batches of the input iterable
+
+    Example:
+        >>> list(batch([1, 2, 3, 4, 5], 2))
+        [[1, 2], [3, 4], [5]]
+    """
+    for i in range(0, len(iterable), size):
+        yield iterable[i : i + size]
