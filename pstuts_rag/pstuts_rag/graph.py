@@ -30,7 +30,7 @@ from app import (
     enter_chain,
 )
 
-from pstuts_rag.rag_for_transcripts import retrieve_videos
+from pstuts_rag.rag_for_transcripts import create_transcript_rag_chain
 
 
 def search_agent(state: PsTutsTeamState, chain: Runnable) -> Dict:
@@ -244,7 +244,7 @@ async def build_the_graph(current_state: ApplicationState):
     )
 
     rag_node, _ = create_rag_node(
-        rag_chain=retrieve_videos(),
+        rag_chain=create_transcript_rag_chain(),
         name=VIDEOARCHIVE,
     )
 

@@ -59,7 +59,7 @@ params = ApplicationParameters()
 async def fill_the_db():
     if state.datastore_manager.count_docs() == 0:
         data: List[Dict[str, Any]] = await load_json_files(params.filename)
-        state.pointsLoaded = await state.datastore_manager.populate_database(
+        state.pointsLoaded = await state.datastore_manager.embed_chunks(
             raw_docs=data
         )
         await cl.Message(

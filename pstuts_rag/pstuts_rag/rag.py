@@ -248,7 +248,7 @@ class RAGChainInstance:
             qdrant_client=self.qdrant_client, name=self.name
         )
         if self.datastore_manager.count_docs() == 0:
-            self.pointsLoaded = await self.datastore_manager.populate_database(
+            self.pointsLoaded = await self.datastore_manager.embed_chunks(
                 raw_docs=json_payload
             )
             logging.info(

@@ -24,220 +24,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 from qdrant_client.models import PointStruct
 
-from pstuts_rag.utils import EmbeddingsAPISelector
-
-
-def batch(iterable: List[Any], size: int = 16) -> Iterator[List[Any]]:
-    """
-    Batch an iterable into chunks of specified size.
-
-    Yields successive chunks from the input iterable, each containing
-    at most 'size' elements. Useful for processing large collections
-    in manageable batches to avoid memory issues or API rate limits.
-
-    Args:
-        iterable (List[Any]): The input list to be batched
-        size (int, optional): Maximum size of each batch. Defaults to 16.
-
-    Yields:
-        List[Any]: Successive batches of the input iterable
-
-    Example:
-        >>> list(batch([1, 2, 3, 4, 5], 2))
-        [[1, 2], [3, 4], [5]]
-    """
-    for i in range(0, len(iterable), size):
-        yield iterable[i : i + size]
-
-
-class VideoTranscriptBulkLoader(BaseLoader):
-    """
-    Loads video transcripts as bulk documents for document processing pipelines.
-
-    Each video becomes a single document with all transcript sentences concatenated.
-    Useful for semantic search across entire video content.
-
-    Inherits from LangChain's BaseLoader for compatibility with document processing chains.
-
-    Attributes:
-        json_payload (List[Dict]): List of video dictionaries containing transcript data
-    """
-
-    def __init__(self, json_payload: List[Dict]):
-        """
-        Initialize the bulk loader with video transcript data.
-
-        Args:
-            json_payload (List[Dict]): List of video dictionaries, each containing:
-                                     - transcripts: List of transcript segments
-                                     - qa: Q&A data (optional)
-                                     - url: Video URL
-                                     - other metadata fields
-        """
-
-        self.json_payload = json_payload
-
-    def lazy_load(self) -> Iterator[Document]:
-        """
-        Lazy loader that yields Document objects with concatenated transcripts.
-
-        Creates one Document per video with all transcript sentences joined by newlines.
-        Metadata includes all video fields except 'transcripts' and 'qa'.
-        The 'url' field is renamed to 'source' for LangChain compatibility.
-
-        Yields:
-            Document: LangChain Document with page_content as concatenated transcript
-                     and metadata containing video information
-        """
-
-        for video in self.json_payload:
-            metadata = dict(video)
-            metadata.pop("transcripts", None)
-            metadata.pop("qa", None)
-            # Rename 'url' key to 'source' in metadata if it exists
-            if "url" in metadata:
-                metadata["source"] = metadata.pop("url")
-            yield Document(
-                page_content="\n".join(
-                    t["sent"] for t in video["transcripts"]
-                ),
-                metadata=metadata,
-            )
-
-
-class VideoTranscriptChunkLoader(BaseLoader):
-    """
-    Loads video transcripts as individual chunk documents for fine-grained processing.
-
-    Each transcript segment becomes a separate document with timing information.
-    Useful for precise timestamp-based retrieval and time-sensitive queries.
-
-    Inherits from LangChain's BaseLoader for compatibility with document processing chains.
-
-    Attributes:
-        json_payload (List[Dict]): List of video dictionaries containing transcript data
-    """
-
-    def __init__(self, json_payload: List[Dict]):
-        """
-        Initialize the chunk loader with video transcript data.
-
-        Args:
-            json_payload (List[Dict]): List of video dictionaries, each containing:
-                                     - transcripts: List of transcript segments with timing
-                                     - qa: Q&A data (optional)
-                                     - url: Video URL
-                                     - other metadata fields
-        """
-
-        self.json_payload = json_payload
-
-    def lazy_load(self) -> Iterator[Document]:
-        """
-        Lazy loader that yields individual Document objects for each transcript segment.
-
-        Creates one Document per transcript segment with timing metadata.
-        Each document contains a single transcript sentence with precise start/end times.
-        The 'url' field is renamed to 'source' for LangChain compatibility.
-
-        Yields:
-            Document: LangChain Document with page_content as single transcript sentence
-                     and metadata containing video info plus time_start and time_end
-        """
-
-        for video in self.json_payload:
-            metadata = dict(video)
-            transcripts = metadata.pop("transcripts", None)
-            metadata.pop("qa", None)
-            # Rename 'url' key to 'source' in metadata if it exists
-            if "url" in metadata:
-                metadata["source"] = metadata.pop("url")
-            for transcript in transcripts:
-                yield Document(
-                    page_content=transcript["sent"],
-                    metadata=metadata
-                    | {
-                        "time_start": transcript["begin"],
-                        "time_end": transcript["end"],
-                    },
-                )
-
-
-async def chunk_transcripts(
-    json_transcripts: List[Dict[str, Any]],
-    semantic_chunker_embedding_model: Embeddings = OpenAIEmbeddings(
-        model="text-embedding-3-small"
-    ),
-) -> List[Document]:
-    """
-    Load and process video transcripts into semantically chunked documents.
-
-    This function takes a list of transcript dictionaries, loads them as both full
-    transcripts and individual chunks, then applies semantic chunking. It also
-    enriches each semantic chunk with timestamp metadata from the original verbatim chunks.
-
-    Args:
-        json_transcripts: List of dictionaries containing video transcript data
-        embeddings: OpenAI embeddings model to use for semantic chunking
-
-    Returns:
-        List of semantically chunked Document objects with enhanced metadata
-    """
-
-    docs_full_transcript: List[Document] = VideoTranscriptBulkLoader(
-        json_payload=json_transcripts
-    ).load()
-    docs_chunks_verbatim: List[Document] = VideoTranscriptChunkLoader(
-        json_payload=json_transcripts
-    ).load()
-
-    # semantically split the combined transcript
-    text_splitter = SemanticChunker(semantic_chunker_embedding_model)
-    docs_group = await asyncio.gather(
-        *[
-            text_splitter.atransform_documents(d)
-            for d in batch(docs_full_transcript, size=2)
-        ]
-    )
-    # Flatten the nested list of documents
-    docs_chunks_semantic: List[Document] = []
-    for group in docs_group:
-        docs_chunks_semantic.extend(group)
-
-    # Create a lookup dictionary for faster access
-    video_id_to_chunks: Dict[int, List[Document]] = {}
-    for chunk in docs_chunks_verbatim:
-        video_id: int = chunk.metadata["video_id"]
-        if video_id not in video_id_to_chunks:
-            video_id_to_chunks[video_id] = []
-        video_id_to_chunks[video_id].append(chunk)
-
-    for chunk in docs_chunks_semantic:
-        video_id = chunk.metadata["video_id"]
-        # Only check chunks from the same video
-        potential_subchunks = video_id_to_chunks.get(video_id, [])
-        subchunks = [
-            c
-            for c in potential_subchunks
-            if c.page_content in chunk.page_content
-        ]
-
-        times = [
-            (t.metadata["time_start"], t.metadata["time_end"])
-            for t in subchunks
-        ]
-        chunk.metadata["speech_start_stop_times"] = times
-
-        if times:  # Avoid IndexError if times is empty
-            chunk.metadata["start"], chunk.metadata["stop"] = (
-                times[0][0],
-                times[-1][-1],
-            )
-        else:
-            chunk.metadata["start"], chunk.metadata["stop"] = None, None
-
-    docs_chunks_semantic[0].metadata.keys()
-    return docs_chunks_semantic
+from pstuts_rag.utils import EmbeddingsAPISelector, flatten, batch
 
 
 class DatastoreManager:
@@ -315,17 +102,45 @@ class DatastoreManager:
 
         self.docs = []
 
-    async def from_json_globs(self, globs: List[str]) -> int:
+    async def from_json_globs(self, globs: List[str] | str) -> int:
+        """
+        Populate the vector database with processed video transcript documents,
+        retrieved from JSON file paths.
 
+        This method performs the complete pipeline:
+            - loading JSON transcripts
+            - semantic chunking with timestamp preservation
+            -
+
+
+        """
         logging.debug("Starting to load files.")
-        data = await load_json_files(globs)
-        logging.debug("Received %d JSON files.", len(data))
-        count = await self.populate_database(data)
+        files = globs_to_paths(globs)
+
+        tasks = [load_json_file(f) for f in files]
+        results = await asyncio.gather(*tasks)
+
+        json_transcripts = list(flatten(results))
+        logging.debug("Received %d JSON files.", len(json_transcripts))
+
+        # perform chunking
+        self.docs: List[Document] = await chunk_transcripts(
+            json_transcripts=json_transcripts,
+            semantic_chunker_embedding_model=self.embeddings,
+        )
+
+        count = await self.embed_chunks(self.docs)
         logging.debug("Uploaded %d records.", count)
 
-        return count
+        self.loading_complete.set()
+        # Execute callbacks (both sync and async)
+        for callback in self._completion_callbacks:
+            if asyncio.iscoroutinefunction(callback):
+                await callback()
+            else:
+                callback()
 
-    async def populate_database(self, raw_docs: List[Dict[str, Any]]) -> int:
+    async def embed_chunks(self, chunked_documents: List[Document]) -> int:
         """
         Populate the vector database with processed video transcript documents.
 
@@ -345,12 +160,6 @@ class DatastoreManager:
             Exception: If embedding generation or database upload fails
         """
 
-        # perform chunking
-        self.docs: List[Document] = await chunk_transcripts(
-            json_transcripts=raw_docs,
-            semantic_chunker_embedding_model=self.embeddings,
-        )
-
         # perform embedding
 
         vector_batches = await asyncio.gather(
@@ -358,7 +167,7 @@ class DatastoreManager:
                 self.embeddings.aembed_documents(
                     [c.page_content for c in chunk_batch]
                 )
-                for chunk_batch in batch(self.docs, 8)
+                for chunk_batch in batch(chunked_documents, 8)
             ]
         )
         vectors = []
@@ -375,7 +184,7 @@ class DatastoreManager:
                     "metadata": doc.metadata,
                 },
             )
-            for id, vector, doc in zip(ids, vectors, self.docs)
+            for id, vector, doc in zip(ids, vectors, chunked_documents)
         ]
 
         # upload qdrant payload
@@ -383,14 +192,6 @@ class DatastoreManager:
             collection_name=self.name,
             points=points,
         )
-
-        self.loading_complete.set()
-        # Execute callbacks (both sync and async)
-        for callback in self._completion_callbacks:
-            if asyncio.iscoroutinefunction(callback):
-                await callback()
-            else:
-                callback()
 
         return len(points)
 
@@ -479,7 +280,7 @@ class DatastoreManager:
             return False
 
 
-async def load_single_json(filepath: str):
+async def load_json_file(filepath: Path):
     """
     Asynchronously load and parse a single JSON file containing video data.
 
@@ -502,53 +303,164 @@ async def load_single_json(filepath: str):
     Note:
         Uses async file I/O for better performance when loading multiple files
     """
-    my_path = Path(filepath)
 
-    async with aiofiles.open(my_path, mode="r", encoding="utf-8") as f:
+    async with aiofiles.open(filepath, mode="r", encoding="utf-8") as f:
         content = await f.read()
         payload = json.loads(content)
         for entry in payload:
-            entry.update({"group": str(my_path)})
+            entry.update({"group": str(filepath)})
     return payload
 
 
-async def load_json_files(glob_list: List[str]):
-    """
-    Asynchronously load and parse multiple JSON files matching given patterns.
+def globs_to_paths(glob_list: List[str] | str) -> List[Path]:
 
-    Uses glob patterns to find files and loads them concurrently for optimal performance.
-    All results are flattened into a single list for unified processing. This function
-    is designed to handle large datasets efficiently by leveraging async I/O.
+    if isinstance(glob_list, str):
+        glob_list = glob_list.split(":")
 
-    Args:
-        glob_list (List[str]): List of glob patterns to match JSON files.
-                                 Supports standard glob syntax including recursive
-                                 patterns with ** for subdirectory traversal.
-
-    Returns:
-        List[Dict]: Flattened list of all video dictionaries from matched files,
-                   with each video containing its source group information
-
-    Raises:
-        FileNotFoundError: If any matched file doesn't exist during loading
-        json.JSONDecodeError: If any file content is not valid JSON format
-        PermissionError: If any file cannot be read due to permissions
-
-    Example:
-        >>> patterns = ["data/*.json", "archive/**/*.json"]
-        >>> videos = await load_json_files(patterns)
-        >>> len(videos)  # Total videos from all matched files
-    """
     logging.debug("Loading from %d globs:", len(glob_list))
 
-    files = []
+    files: List[Path] = []
     for globstring in glob_list:
         logging.debug("Loading glob: %s", globstring)
-        new_files = glob.glob(globstring, recursive=True)
-        logging.debug("New files: %d", len(new_files))
-        files.extend(new_files)
+        new_files = [Path(f) for f in glob.glob(globstring, recursive=True)]
+        files.extend(filter(lambda f: f.exists(), new_files))
+
     logging.debug("Total files: %d", len(files))
 
-    tasks = [load_single_json(f) for f in files]
-    results = await asyncio.gather(*tasks)
-    return [item for sublist in results for item in sublist]  # flatten
+    return files
+
+
+def load_transcripts_whole(json_payload: List[Dict]) -> Iterator[Document]:
+    """
+    Lazy loader that yields Document objects with concatenated transcripts.
+
+    Creates one Document per video with all transcript sentences joined by newlines.
+    Metadata includes all video fields except 'transcripts' and 'qa'.
+    The 'url' field is renamed to 'source' for LangChain compatibility.
+
+    Yields:
+        Document: LangChain Document with page_content as concatenated transcript
+                    and metadata containing video information
+    """
+
+    for video in json_payload:
+        metadata = dict(video)
+        metadata.pop("transcripts", None)
+        metadata.pop("qa", None)
+        # Rename 'url' key to 'source' in metadata if it exists
+        if "url" in metadata:
+            metadata["source"] = metadata.pop("url")
+        yield Document(
+            page_content="\n".join(t["sent"] for t in video["transcripts"]),
+            metadata=metadata,
+        )
+
+
+def load_transcripts_segments(
+    json_payload: List[Dict],
+) -> Iterator[Document]:
+    """
+    Lazy loader that yields individual Document objects for each transcript segment.
+
+    Creates one Document per transcript segment with timing metadata.
+    Each document contains a single transcript sentence with precise start/end times.
+    The 'url' field is renamed to 'source' for LangChain compatibility.
+
+    Yields:
+        Document: LangChain Document with page_content as single transcript sentence
+                    and metadata containing video info plus time_start and time_end
+    """
+
+    for video in json_payload:
+        metadata = dict(video)
+        transcripts = metadata.pop("transcripts", None)
+        metadata.pop("qa", None)
+        # Rename 'url' key to 'source' in metadata if it exists
+        if "url" in metadata:
+            metadata["source"] = metadata.pop("url")
+        for transcript in transcripts:
+            yield Document(
+                page_content=transcript["sent"],
+                metadata=metadata
+                | {
+                    "time_start": transcript["begin"],
+                    "time_end": transcript["end"],
+                },
+            )
+
+
+async def chunk_transcripts(
+    json_transcripts: List[Dict[str, Any]],
+    semantic_chunker_embedding_model: Embeddings = OpenAIEmbeddings(
+        model="text-embedding-3-small"
+    ),
+) -> List[Document]:
+    """
+    Load and process video transcripts into semantically chunked documents.
+
+    This function takes a list of transcript dictionaries, loads them as both full
+    transcripts and individual chunks, then applies semantic chunking. It also
+    enriches each semantic chunk with timestamp metadata from the original verbatim chunks.
+
+    Args:
+        json_transcripts: List of dictionaries containing video transcript data
+        embeddings: OpenAI embeddings model to use for semantic chunking
+
+    Returns:
+        List of semantically chunked Document objects with enhanced metadata
+    """
+
+    docs_full_transcript: List[Document] = list(
+        load_transcripts_whole(json_transcripts)
+    )
+    docs_chunks_verbatim: List[Document] = list(
+        load_transcripts_segments(json_transcripts)
+    )
+
+    # semantically split the combined transcript
+    text_splitter = SemanticChunker(semantic_chunker_embedding_model)
+    docs_group = await asyncio.gather(
+        *[
+            text_splitter.atransform_documents(d)
+            for d in batch(docs_full_transcript, size=2)
+        ]
+    )
+    # Flatten the nested list of documents
+    docs_chunks_semantic: List[Document] = []
+    for group in docs_group:
+        docs_chunks_semantic.extend(group)
+
+    # Create a lookup dictionary for faster access
+    video_id_to_chunks: Dict[int, List[Document]] = {}
+    for chunk in docs_chunks_verbatim:
+        video_id: int = chunk.metadata["video_id"]
+        if video_id not in video_id_to_chunks:
+            video_id_to_chunks[video_id] = []
+        video_id_to_chunks[video_id].append(chunk)
+
+    for chunk in docs_chunks_semantic:
+        video_id = chunk.metadata["video_id"]
+        # Only check chunks from the same video
+        potential_subchunks = video_id_to_chunks.get(video_id, [])
+        subchunks = [
+            c
+            for c in potential_subchunks
+            if c.page_content in chunk.page_content
+        ]
+
+        times = [
+            (t.metadata["time_start"], t.metadata["time_end"])
+            for t in subchunks
+        ]
+        chunk.metadata["speech_start_stop_times"] = times
+
+        if times:  # Avoid IndexError if times is empty
+            chunk.metadata["start"], chunk.metadata["stop"] = (
+                times[0][0],
+                times[-1][-1],
+            )
+        else:
+            chunk.metadata["start"], chunk.metadata["stop"] = None, None
+
+    docs_chunks_semantic[0].metadata.keys()
+    return docs_chunks_semantic

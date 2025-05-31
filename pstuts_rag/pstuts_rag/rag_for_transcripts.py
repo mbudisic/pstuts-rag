@@ -18,7 +18,7 @@ from langchain_ollama import ChatOllama
 
 from .datastore import DatastoreManager
 from .prompts import RAG_PROMPT_TEMPLATES
-
+from pstuts_rag.utils import ChatAPISelector
 from pstuts_rag.configuration import Configuration, ModelAPI
 
 
@@ -37,6 +37,7 @@ def pack_references(msg_dict: Dict[str, Any]) -> AIMessage:
     answer: AIMessage = msg_dict["answer"]
     input = msg_dict["input"]
 
+    # Extract relevant metadata from each document in the context
     reference_dicts = [
         {k: doc.metadata[k] for k in ("title", "source", "start", "stop")}
         for doc in input["context"]
@@ -44,11 +45,13 @@ def pack_references(msg_dict: Dict[str, Any]) -> AIMessage:
     references = str(json.dumps(reference_dicts, indent=2))
 
     text_w_references = answer.content
+    # Only append references if the model provided a substantive answer
     if "I don't know" not in answer.content:
         text_w_references = "\n".join(
             [str(text_w_references), "**REFERENCES**", references]
         )
 
+    # Create new message with references and preserve original context metadata
     output: AIMessage = answer.model_copy(
         update={
             "content": text_w_references,
@@ -63,88 +66,60 @@ def pack_references(msg_dict: Dict[str, Any]) -> AIMessage:
     return output
 
 
-def retrieve_videos(
+def create_transcript_rag_chain(
     datastore: DatastoreManager,
     config: Union[RunnableConfig, Configuration] = Configuration(),
 ) -> Runnable:
+    """Create a Retrieval-Augmented Generation (RAG) chain for video transcript search.
 
+    This function constructs a complete RAG pipeline that:
+    1. Takes a user question as input
+    2. Retrieves relevant video transcript chunks from the datastore
+    3. Generates an answer using an LLM with the retrieved context
+    4. Packages the response with reference information
+
+    Args:
+        datastore: The DatastoreManager containing video transcript embeddings
+        config: Configuration object or RunnableConfig with model and retrieval settings
+
+    Returns:
+        Runnable: A LangChain runnable that processes questions and returns
+                 answers with embedded references to source video segments
+    """
+
+    # Handle both Configuration objects and RunnableConfig dictionaries
     configurable = (
         config
         if isinstance(config, Configuration)
         else Configuration.from_runnable_config(config)
     )
 
-    cls = {
-        ModelAPI.HUGGINGFACE: ChatHuggingFace,
-        ModelAPI.OPENAI: ChatOpenAI,
-        ModelAPI.OLLAMA: ChatOllama,
-    }.get(configurable.llm_api, ChatOpenAI)
+    # Select the appropriate chat model class based on configuration
+    cls = ChatAPISelector.get(configurable.llm_api, ChatOpenAI)
 
     llm = cls(model=configurable.llm_tool_model)
 
+    # Create the answer generation chain using prompt templates
     answer_chain = (
         ChatPromptTemplate.from_messages(list(RAG_PROMPT_TEMPLATES.items()))
         | llm
     )
 
+    # Build the complete RAG chain with the following flow:
+    # question -> parallel(context_retrieval, question_passthrough) -> llm_answer -> pack_references
     rag_chain = (
-        itemgetter("question")
-        | RunnableParallel(
+        itemgetter("question")  # Extract question from input dict
+        | RunnableParallel(  # Run context retrieval and question passing in parallel
             context=datastore.get_retriever(
                 n_context_docs=configurable.n_context_docs
             ),
-            question=RunnablePassthrough(),
+            question=RunnablePassthrough(),  # Pass question unchanged
         )
-        | {
-            "input": RunnablePassthrough(),
-            "answer": answer_chain,
+        | {  # Prepare input dict for final processing
+            "input": RunnablePassthrough(),  # Contains both context and question
+            "answer": answer_chain,  # Generate answer using retrieved context
         }
-        | pack_references
+        | pack_references  # Add reference metadata to the final response
     )
 
     return rag_chain
-
-
-def startup(
-    config=Configuration(),
-    callback_on_loading_complete: Optional[Callable] = None,
-):
-    """
-    Initialize the application with optional loading completion callback.
-
-    Args:
-        config: Configuration object with application settings
-        on_loading_complete: Optional callback (sync or async) to call when
-                           datastore loading completes
-
-    Returns:
-        DatastoreManager: The initialized datastore manager
-    """
-
-    ### PROCESS THE CONFIGURATION
-    log_level = getattr(logging, config.eva_log_level, logging.INFO)
-    logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
-
-    ### CREATE THE DATABASE
-
-    datastore = DatastoreManager()
-    if callback_on_loading_complete:
-        datastore.add_completion_callback(callback_on_loading_complete)
-
-    ### START DATABASE POPULATION
-
-    globs = [str(g) for g in config.transcript_glob.split(":")]
-
-    # # Add custom callback if provided, otherwise use default logging
-    # if on_loading_complete:
-    #     datastore.add_completion_callback(on_loading_complete)
-    # else:
-    #     # Default callback for logging
-    #     def default_logging_callback():
-    #         logging.info("🎉 Datastore loading completed!")
-
-    #     datastore.add_completion_callback(default_logging_callback)
-
-    asyncio.create_task(datastore.from_json_globs(globs))
-
-    return datastore

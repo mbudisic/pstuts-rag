@@ -70,6 +70,8 @@ class Configuration:
             if config and "configurable" in config
             else {}
         )
+        # Map each dataclass field to environment variables or configurable values
+        # Priority: environment variables > configurable dict values > field defaults
         values: dict[str, Any] = {
             f.name: os.environ.get(f.name.upper(), configurable.get(f.name))
             for f in fields(cls)
