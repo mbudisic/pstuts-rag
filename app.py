@@ -78,7 +78,7 @@ class ApplicationState:
     """
 
     config: Configuration = Configuration()
-    compiled_graph = None
+    ai_graph = None
     datastore: DatastoreManager = None
     checkpointer = MemorySaver()
 
@@ -127,9 +127,9 @@ async def on_chat_start():
         )
 
     # Initialize and compile graph synchronously (blocking as intended)
-    if _app_state.compiled_graph is None:
+    if _app_state.ai_graph is None:
         _app_state.datastore, graph_builder = initialize(_app_state.datastore)
-        _app_state.compiled_graph = graph_builder.compile(
+        _app_state.ai_graph = graph_builder.compile(
             checkpointer=_app_state.checkpointer
         )
 
@@ -238,21 +238,23 @@ async def main(user_cl_message: cl.Message):
     Args:
         message: User's input message
     """
-    # for s in app_state.ai_graph.stream(
-    #     user_cl_message.content, {"recursion_limit": 20}
-    # ):
-    #     if "__end__" not in s and "supervisor" not in s.keys():
-    #         for [node_type, node_response] in s.items():
-    #             print(f"Processing {node_type} messages")
-    #             for node_message in node_response["messages"]:
-    #                 print(f"Message {node_message}")
-    #                 msg = cl.Message(content="")
-    #                 text, references = process_response(node_message)
-    #                 for token in [char for char in text]:
-    #                     await msg.stream_token(token)
-    #                 await msg.send()
-    #                 for m in references:
-    #                     await m.send()
+    global _app_state
+
+    for s in _app_state.ai_graph.stream(
+        user_cl_message.content, {"recursion_limit": 5}
+    ):
+        if "__end__" not in s:
+            for [node_type, node_response] in s.items():
+                print(f"Processing {node_type} messages")
+                for node_message in node_response["messages"]:
+                    print(f"Message {node_message}")
+                    msg = cl.Message(content="")
+                    text, references = process_response(node_message)
+                    for token in [char for char in text]:
+                        await msg.stream_token(token)
+                    await msg.send()
+                    for m in references:
+                        await m.send()
 
 
 if __name__ == "__main__":
