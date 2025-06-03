@@ -1,7 +1,7 @@
 # nodes.py
 from enum import Enum
-from typing import Annotated, Any, Callable, Dict, Literal
-
+from typing import Annotated, Any, Callable, Dict, Literal, Tuple
+import functools
 import asyncio
 import logging
 import operator
@@ -34,10 +34,6 @@ class TutorialState(MessagesState):
     video_references: Annotated[list[Document], operator.add]
     url_references: Annotated[list[Dict], operator.add]
     loop_count: int
-
-
-datastore = DatastoreManager()
-datastore.add_completion_callback(lambda: logging.warning("Loading complete."))
 
 
 def research(state: TutorialState, config: RunnableConfig):
@@ -130,7 +126,9 @@ async def search_help(
     return {"messages": [url_summary], "url_references": results["results"]}
 
 
-async def search_rag(state: TutorialState, config: RunnableConfig):
+async def search_rag(
+    state: TutorialState, config: RunnableConfig, datastore: DatastoreManager
+):
     """Search tutorial transcripts using RAG (Retrieval-Augmented Generation).
 
     Args:
@@ -150,18 +148,6 @@ async def search_rag(state: TutorialState, config: RunnableConfig):
         "video_references": response.additional_kwargs["context"],
     }
 
-
-def join(state: TutorialState, config: RunnableConfig):
-    """Join/merge results from multiple search sources.
-
-    Args:
-        state: Current TutorialState with search results
-        config: RunnableConfig for accessing configuration parameters
-
-    Returns:
-        None: Currently a placeholder function
-    """
-    pass
 
 
 def write_answer(state: TutorialState, config: RunnableConfig):
@@ -346,32 +332,84 @@ def write_answer(state: TutorialState, config: RunnableConfig):
     return {"messages": [final_answer]}
 
 
-graph_builder = StateGraph(TutorialState)
-
-# graph_builder.add_node(route_is_relevant)
-# graph_builder.add_node(route_is_complete, defer=True)
-graph_builder.add_node(research)
-graph_builder.add_node(search_help)
-graph_builder.add_node(search_rag)
-graph_builder.add_node(join)
-graph_builder.add_node(write_answer)
-
-# graph_builder.add_conditional_edges(
-#     START,
-#     route_is_relevant,
-#     {"yes": research.__name__, "no": write_answer.__name__},
-# )
-graph_builder.add_node(route_is_relevant)
-graph_builder.add_node(route_is_complete, defer=True)
-
-graph_builder.add_edge(START, route_is_relevant.__name__)
-graph_builder.add_edge(research.__name__, search_help.__name__)
-graph_builder.add_edge(research.__name__, search_rag.__name__)
-graph_builder.add_edge(search_help.__name__, route_is_complete.__name__)
-graph_builder.add_edge(search_rag.__name__, route_is_complete.__name__)
-
-graph_builder.add_edge(write_answer.__name__, END)
+# Lazy initialization: compiled graph is cached
+_compiled_graph = None
+_datastore = None
 
 
-graph = graph_builder.compile()
-asyncio.run(datastore.from_json_globs(Configuration().transcript_glob))
+def initialize(
+    datastore: DatastoreManager | None = None,
+) -> Tuple[DatastoreManager, StateGraph]:
+    if datastore is None:
+        datastore = DatastoreManager(
+            config=Configuration()
+        ).add_completion_callback(lambda: "Datastore loading completed.")
+
+    graph_builder = StateGraph(TutorialState)
+
+    # graph_builder.add_node(route_is_relevant)
+    # graph_builder.add_node(route_is_complete, defer=True)
+    graph_builder.add_node(research)
+    graph_builder.add_node(search_help)
+    graph_builder.add_node(
+        "search_rag", functools.partial(search_rag, datastore=datastore)
+    )
+    graph_builder.add_node(write_answer)
+
+    # graph_builder.add_conditional_edges(
+    #     START,
+    #     route_is_relevant,
+    #     {"yes": research.__name__, "no": write_answer.__name__},
+    # )
+    graph_builder.add_node(route_is_relevant)
+    graph_builder.add_node(route_is_complete, defer=True)
+
+    graph_builder.add_edge(START, route_is_relevant.__name__)
+    graph_builder.add_edge(research.__name__, search_help.__name__)
+    graph_builder.add_edge(research.__name__, search_rag.__name__)
+    graph_builder.add_edge(search_help.__name__, route_is_complete.__name__)
+    graph_builder.add_edge(search_rag.__name__, route_is_complete.__name__)
+
+    graph_builder.add_edge(write_answer.__name__, END)
+
+    return datastore, graph_builder
+
+
+async def graph(config: RunnableConfig = None):
+    """Graph factory function for LangGraph Studio compatibility.
+
+    This function provides lazy initialization of the graph and datastore,
+    allowing the module to be imported without triggering compilation.
+    LangGraph Studio requires this function to take exactly one
+    RunnableConfig argument.
+
+    Args:
+        config: RunnableConfig (required by LangGraph Studio, but can be None)
+
+    Returns:
+        Compiled LangGraph instance
+    """
+    global _compiled_graph
+    global _datastore
+
+    # Initialize datastore using asyncio.to_thread to avoid blocking
+    initialize_datastore: bool = _datastore is None
+    if initialize_datastore:
+        _datastore = await asyncio.to_thread(
+            lambda: DatastoreManager(
+                config=Configuration()
+            ).add_completion_callback(lambda: "Datastore loading completed.")
+        )
+
+    # Initialize and compile graph synchronously (blocking as intended)
+    if _compiled_graph is None:
+        _datastore, graph_builder = initialize(_datastore)
+        _compiled_graph = graph_builder.compile()
+
+    # Start datastore population as background task (non-blocking)
+    if initialize_datastore:
+        asyncio.create_task(
+            _datastore.from_json_globs(Configuration().transcript_glob)
+        )
+
+    return _compiled_graph

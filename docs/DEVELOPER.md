@@ -158,6 +158,61 @@ ipdb  # Available for interactive debugging
    - `evaluate_rag.ipynb` for systematic evaluation
    - Fine-tuning experiments in `Fine_Tuning_Embedding_for_PSTuts.ipynb`
 
+## 🌊 Lazy Graph Initialization
+
+The project uses a **lazy initialization pattern** for the LangGraph to avoid expensive compilation during module imports while maintaining compatibility with LangGraph Studio.
+
+### 🔧 Implementation Pattern
+
+```python
+# In pstuts_rag/nodes.py
+_compiled_graph = None
+
+def graph(config: RunnableConfig = None):
+    """Graph factory function for LangGraph Studio compatibility.
+    
+    This function provides lazy initialization of the graph and datastore,
+    allowing the module to be imported without triggering compilation.
+    LangGraph Studio requires this function to take exactly one RunnableConfig argument.
+    
+    Args:
+        config: RunnableConfig (required by LangGraph Studio, but can be None)
+    
+    Returns:
+        Compiled LangGraph instance
+    """
+    global _compiled_graph
+    if _compiled_graph is None:
+        _compiled_graph = graph_builder.compile()
+        # Initialize datastore when graph is first accessed
+        asyncio.run(datastore.from_json_globs(Configuration().transcript_glob))
+    return _compiled_graph
+
+def get_graph():
+    """Convenience function to get the compiled graph without config argument."""
+    return graph()
+```
+
+### 🎯 Benefits
+
+- **Fast imports**: Module loading doesn't trigger graph compilation 🚀
+- **LangGraph Studio compatibility**: Maintains expected `graph` variable for discovery 🛠️
+- **On-demand initialization**: Graph and datastore only initialize when actually used ⚡
+- **Memory efficiency**: Resources allocated only when needed 💾
+
+### 📄 Studio Configuration
+
+The `langgraph.json` file correctly references the factory function:
+```json
+{
+    "graphs": {
+        "enhanced_video_archive": "./pstuts_rag/pstuts_rag/nodes.py:graph"
+    }
+}
+```
+
+When LangGraph Studio accesses the `graph` function, it automatically triggers lazy initialization and provides the compiled graph instance. The factory function pattern ensures compatibility while maintaining performance benefits.
+
 ## 🏗️ Architecture Notes
 
 - **Embedding models**: Uses custom fine-tuned `snowflake-arctic-embed-s-ft-pstuts` by default
