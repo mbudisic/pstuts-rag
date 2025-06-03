@@ -36,7 +36,18 @@ from pstuts_rag.rag_for_transcripts import create_transcript_rag_chain
 
 
 def search_agent(state: PsTutsTeamState, chain: Runnable) -> Dict:
-    """Extracts the search query from the current message chain in state."""
+    """Extract search query from state and execute it using the provided chain.
+
+    Attempts to extract a query from the state's input field or the last message,
+    then executes the search using the provided chain.
+
+    Args:
+        state: PsTutsTeamState containing input or messages
+        chain: Runnable chain to execute the search query
+
+    Returns:
+        Dict: Dictionary with 'output' key containing search results or error message
+    """
     question = state.get("input", None)
     if not question and state.get("messages", []):
         last_message = state["messages"][-1]
@@ -61,7 +72,20 @@ def agent_node(
     name: str,
     output_field: str = "output",
 ):
-    """agent_node calls the invoke function of the agent Runnable"""
+    """Execute an agent and format its output as an AIMessage.
+
+    This function serves as a wrapper for agent execution within the graph,
+    ensuring consistent message formatting and state management.
+
+    Args:
+        state: Current PsTutsTeamState for the conversation
+        agent: Runnable agent to execute
+        name: Name to assign to the AI message
+        output_field: Field name to extract from agent result (default: "output")
+
+    Returns:
+        Dict: Dictionary with 'messages' key containing formatted AIMessage
+    """
     # Initialize team_members if it's not already in the state
     if "team_members" not in state:
         state["team_members"] = []
@@ -103,7 +127,19 @@ def create_agent(
     tools: list,
     system_prompt: str,
 ):
-    """Create a function-calling agent and add it to the graph."""
+    """Create a function-calling agent with the specified tools and prompt.
+
+    Builds a LangChain agent that can use function calling with provided tools,
+    configured with a custom system prompt and agent executor.
+
+    Args:
+        llm: Language model to power the agent
+        tools: List of tools available to the agent
+        system_prompt: System prompt to configure agent behavior
+
+    Returns:
+        AgentExecutor: Configured agent executor ready for use
+    """
     system_prompt += pstuts_rag.prompts.AGENT_SYSTEM
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -118,26 +154,23 @@ def create_agent(
 
 
 def create_tavily_node(
-     name: str = "AdobeHelp", config: Configuration = Configuration() ) -> Callable:
+    name: str = "AdobeHelp", config: Configuration = Configuration()
+) -> Callable:
     """Initialize tool, agent, and node for Tavily search of helpx.adobe.com.
 
     This function sets up a search agent that can query Adobe Photoshop help topics
     using the Tavily search engine, specifically targeting helpx.adobe.com.
 
     Args:
-        llm: The language model to power the agent.
-        name: The name to assign to the agent node. Defaults to "AdobeHelp".
+        name: The name to assign to the agent node (defaults to "AdobeHelp")
+        config: Configuration object for LLM and other settings
 
     Returns:
-        Tuple containing:
-            - A callable node function that can be added to a graph
-            - The configured agent executor
-            - The Tavily search tool instance
+        Callable: A node function that can be added to a LangGraph
     """
-    
+
     cls = ChatAPISelector.get(config.llm_api, ChatOpenAI)
     llm = cls(model=config.llm_tool_model)
-
 
     adobe_help_search = TavilySearchResults(
         max_results=5, include_domains=["helpx.adobe.com"]
@@ -157,7 +190,19 @@ def create_team_supervisor(
     members,
     config: Configuration = Configuration(),
 ):
-    """An LLM-based router."""
+    """Create an LLM-based router to coordinate team member selection.
+
+    Builds a supervisor agent that routes requests to appropriate team members
+    or finishes the conversation based on the current context.
+
+    Args:
+        system_prompt: System prompt to guide routing decisions
+        members: List of team member names available for routing
+        config: Configuration object for LLM settings
+
+    Returns:
+        Runnable: Configured routing chain with function calling
+    """
     options = ["FINISH"] + members
     function_def = {
         "name": "route",
@@ -198,7 +243,17 @@ def create_team_supervisor(
 
 
 def initialize_datastore(callback: Optional[Callable] = None):
+    """Initialize and start loading the datastore in the background.
 
+    Creates a DatastoreManager instance and begins asynchronous loading
+    of transcript data from configured JSON glob patterns.
+
+    Args:
+        callback: Optional callback function to execute when loading completes
+
+    Returns:
+        DatastoreManager: Configured datastore instance with loading in progress
+    """
     datastore = DatastoreManager()
     if callback:
         datastore.add_completion_callback(callback)
@@ -209,7 +264,9 @@ def initialize_datastore(callback: Optional[Callable] = None):
     return datastore
 
 
-async def build_the_graph(datastore: DatastoreManager, config:Configuration=Configuration()):
+async def build_the_graph(
+    datastore: DatastoreManager, config: Configuration = Configuration()
+):
     """
     Builds the agent graph for routing user queries.
 
@@ -225,8 +282,7 @@ async def build_the_graph(datastore: DatastoreManager, config:Configuration=Conf
     rag_node = create_transcript_rag_chain(datastore, config=config)
 
     supervisor_agent = create_team_supervisor(
-        SUPERVISOR_SYSTEM,
-        [VIDEOARCHIVE, ADOBEHELP], config=config
+        SUPERVISOR_SYSTEM, [VIDEOARCHIVE, ADOBEHELP], config=config
     )
 
     ai_graph = StateGraph(PsTutsTeamState, config_schema=Configuration)
@@ -254,5 +310,5 @@ async def build_the_graph(datastore: DatastoreManager, config:Configuration=Conf
 
 
 # Note: Cannot run build_the_graph() here as it requires current_state parameter
-db = initialize_datastore(lambda _ : logging.info("Database initialized"))
-graph = asyncio.run( build_the_graph(db) )
+db = initialize_datastore(lambda _: logging.info("Database initialized"))
+graph = asyncio.run(build_the_graph(db))

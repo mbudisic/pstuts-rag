@@ -91,6 +91,30 @@ pip install -e ".[dev,web]"        # Core + dev + web server
   - `create_team_supervisor()`: LLM-based routing supervisor
 - **LangGraph implementation**: Multi-agent coordination with state management
 
+#### 🛠️ Interactive Interrupt System
+The system includes a sophisticated interrupt mechanism that allows for human-in-the-loop decision making during workflow execution.
+
+**Key Features:**
+- **Permission-based search control**: Users can grant or deny permission for web searches on a per-query basis
+- **Real-time interrupts**: Workflow pauses execution to request user input when search permission is set to "ASK" 
+- **Graceful fallback**: System continues with local RAG search if web search is denied
+- **State persistence**: Search permission decisions are maintained throughout the session
+
+**Implementation Details:**
+- **`YesNoAsk` enum**: Manages three permission states - `YES`, `NO`, and `ASK`
+- **Interrupt points**: Built into the `search_help` node using LangGraph's `interrupt()` function
+- **Configuration control**: Default permission behavior set via `EVA_SEARCH_PERMISSION` environment variable
+- **Interactive prompts**: Users receive clear yes/no prompts with automatic parsing
+
+**Usage Workflow:**
+1. User submits a query requiring web search
+2. If `search_permission = ASK`, system pauses with interrupt prompt
+3. User responds with "yes" to permit search or any other response to deny
+4. System logs the decision and continues with appropriate search strategy
+5. Permission state persists for the current session
+
+This feature enables controlled access to external resources while maintaining autonomous operation when permissions are pre-configured. 🤖✋
+
 #### 📊 Document Processing
 - **`VideoTranscriptBulkLoader`**: Loads entire video transcripts as single documents
 - **`VideoTranscriptChunkLoader`**: Loads individual transcript segments with timestamps
@@ -262,4 +286,52 @@ if await datastore.wait_for_loading(timeout=60):
     print("Loading completed within timeout")
 else:
     print("Loading timed out")
+``` 
+
+#### 🛠️ Interactive Interrupt System Usage
+
+**Environment Configuration:**
+```bash
+# Enable interactive prompts (default)
+export EVA_SEARCH_PERMISSION="ask"
+
+# Pre-approve all searches (autonomous mode)
+export EVA_SEARCH_PERMISSION="yes" 
+
+# Block all searches (local-only mode)  
+export EVA_SEARCH_PERMISSION="no"
+```
+
+**Node Implementation Example:**
+```python
+# In search_help node (nodes.py)
+decision = state["search_permission"]
+if decision == YesNoAsk.ASK:
+    # Pause execution and request user input
+    response = interrupt(
+        f"Do you allow Internet search for query '{query}'?"
+        "Answer 'yes' will perform the search, any other answer will skip it."
+    )
+    
+    # Parse user response  
+    decision = YesNoAsk.YES if "yes" in response.strip() else YesNoAsk.NO
+    
+    # Update state and continue
+    return Command(
+        update={"search_permission": decision}, 
+        goto=search_help.__name__
+    )
+```
+
+**Runtime Behavior:**
+```
+User Query: "How do I use layer masks in Photoshop?"
+System: "Do you allow Internet search for query 'How do I use layer masks in Photoshop?'? Answer 'yes' will perform the search, any other answer will skip it."
+User: "yes"  
+System: [Continues with web search + local RAG search]
+
+User Query: "What are blend modes?"
+System: "Do you allow Internet search for query 'What are blend modes?'? Answer 'yes' will perform the search, any other answer will skip it."  
+User: "no"
+System: [Skips web search, continues with local RAG only]
 ``` 

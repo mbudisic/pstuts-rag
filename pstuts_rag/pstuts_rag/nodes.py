@@ -1,6 +1,6 @@
 # nodes.py
 from enum import Enum
-from typing import Annotated, Any, Callable, Dict, Literal, Tuple
+from typing import Annotated, Any, Callable, Dict, Literal, Tuple, Union
 import functools
 import asyncio
 import logging
@@ -10,8 +10,8 @@ from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.types import Command
 from langchain_core.documents import Document
 from langchain_core.runnables import RunnableConfig
-from langchain_core.messages import HumanMessage, AIMessage
-from langgraph.checkpoint.memory import InMemorySaver
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from langgraph.checkpoint.memory import MemorySaver
 from numpy import add
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_tavily import TavilyExtract
@@ -26,6 +26,39 @@ from pstuts_rag.prompts import NODE_PROMPTS
 from pstuts_rag.rag_for_transcripts import create_transcript_rag_chain
 
 
+class YesNoAsk(Enum):
+    """Enumeration for user permission states regarding search operations.
+
+    Attributes:
+        YES: Permission granted for search operations
+        NO: Permission denied for search operations
+        ASK: Permission should be requested from user interactively
+    """
+
+    YES = "yes"
+    NO = "no"
+    ASK = "ask"
+
+    @classmethod
+    def from_string(cls, value: str, default=None) -> "YesNoAsk":
+        """Parse enum from string with optional default fallback.
+
+        Args:
+            value: String value to parse (case-insensitive)
+            default: Default enum value if parsing fails (defaults to ASK)
+
+        Returns:
+            YesNoAsk: Parsed enum value or default if parsing fails
+        """
+        if default is None:
+            default = cls.ASK
+
+        try:
+            return cls(value.lower().strip())
+        except ValueError:
+            return default
+
+
 class TutorialState(MessagesState):
     """State management for tutorial team workflow orchestration."""
 
@@ -34,6 +67,44 @@ class TutorialState(MessagesState):
     video_references: Annotated[list[Document], operator.add]
     url_references: Annotated[list[Dict], operator.add]
     loop_count: int
+    search_permission: YesNoAsk
+
+
+class QueryMessage(AIMessage):
+    """A message class representing a research query, retaining all attributes from any message type."""
+
+    @classmethod
+    def from_message(cls, message: BaseMessage) -> "QueryMessage":
+        """Create a QueryMessage from any BaseMessage type, retaining all attributes.
+
+        Args:
+            message: Any BaseMessage instance (HumanMessage, AIMessage, SystemMessage, etc.)
+
+        Returns:
+            QueryMessage: New QueryMessage instance with all attributes from the source message
+        """
+        # Get all attributes from the source message
+        message_dict = message.model_dump()
+
+        # Create new QueryMessage with all attributes preserved
+        return cls(**message_dict)
+
+    def __init__(self, content: Union[str, BaseMessage] = "", **kwargs):
+        """Initialize QueryMessage from content string or any BaseMessage type.
+
+        Args:
+            content: Either a string content or a BaseMessage instance
+            **kwargs: Additional keyword arguments for the message
+        """
+        if isinstance(content, BaseMessage):
+            # If content is a BaseMessage, convert it
+            source_dict = content.model_dump()
+            # Merge kwargs into source_dict, with kwargs taking precedence
+            source_dict.update(kwargs)
+            super().__init__(**source_dict)
+        else:
+            # Normal string content initialization
+            super().__init__(content=content, **kwargs)
 
 
 def research(state: TutorialState, config: RunnableConfig):
@@ -64,14 +135,18 @@ def research(state: TutorialState, config: RunnableConfig):
     search_query = llm.invoke([HumanMessage(content=prompt)])
 
     return {
-        "messages": [search_query],
+        "messages": [QueryMessage(search_query)],
         "loop_count": state.get("loop_count", 0) + 1,
     }
 
 
+from langgraph.types import interrupt
+from langgraph.checkpoint.memory import MemorySaver
+
+
 async def search_help(
     state: TutorialState, config: RunnableConfig | None = None
-):
+) -> Command[Literal["search_help", "route_is_complete"]]:
     """Search Adobe Help documentation for relevant information.
 
     Args:
@@ -100,30 +175,71 @@ async def search_help(
         include_images=True,
         response_format="content_and_artifact",  # Always returns artifacts
     )
-    query = state["messages"][-1].content
-    results = await adobe_help_search.ainvoke(query)
+    queries = [
+        msg.content
+        for msg in state["messages"]
+        if isinstance(msg, QueryMessage)
+    ]
+    query = queries[-1]
 
-    urls = list(r["url"] for r in results)
-    tool = TavilyExtract(
-        extract_depth="basic",
-        include_images=False,
-    )
+    decision = state["search_permission"]
+    if decision == YesNoAsk.ASK:
 
-    results = await tool.ainvoke({"urls": urls})
+        response = interrupt(
+            (
+                f"Do you allow Internet search for query '{query}'?"
+                "Answer 'yes' will perform the search, any other answer will skip it."
+            )
+        )
 
-    if "results" in results:
-        all_text = list(r["raw_content"] for r in results["results"])
+        logging.info(f"Permission response '{response}'")
+        decision = YesNoAsk.YES if "yes" in response.strip() else YesNoAsk.NO
+        return Command(
+            update={"search_permission": decision}, goto=search_help.__name__
+        )
+
+    response = {
+        "messages": [],
+        "url_references": [],
+        "search_permission": YesNoAsk.from_string(
+            configurable.search_permission
+        ),
+    }
+
+    if decision == YesNoAsk.YES:
+        longform = f"Query '{query}' is permitted."
     else:
-        all_text = []
+        longform = f"Query '{query}' is NOT permitted."
 
-    prompt = prompt.format(
-        query=query,
-        text="\n***\n".join(all_text),
-    )
+    response["messages"].append({"role": "human", "content": longform})
 
-    url_summary = await llm.ainvoke([HumanMessage(content=prompt)])
+    if decision == YesNoAsk.YES:
 
-    return {"messages": [url_summary], "url_references": results["results"]}
+        results = await adobe_help_search.ainvoke(query)
+
+        urls = list(r["url"] for r in results)
+        tool = TavilyExtract(
+            extract_depth="basic",
+            include_images=False,
+        )
+
+        results = await tool.ainvoke({"urls": urls})
+
+        if "results" in results:
+            all_text = list(r["raw_content"] for r in results["results"])
+        else:
+            all_text = []
+
+        prompt = prompt.format(
+            query=query,
+            text="\n***\n".join(all_text),
+        )
+
+        url_summary = await llm.ainvoke([HumanMessage(content=prompt)])
+        response["messages"].append(url_summary)
+        response["url_references"].extend(results["results"])
+
+    return Command(update=response, goto=route_is_complete.__name__)
 
 
 async def search_rag(
@@ -147,7 +263,6 @@ async def search_rag(
         "messages": [response],
         "video_references": response.additional_kwargs["context"],
     }
-
 
 
 def write_answer(state: TutorialState, config: RunnableConfig):
@@ -335,11 +450,46 @@ def write_answer(state: TutorialState, config: RunnableConfig):
 # Lazy initialization: compiled graph is cached
 _compiled_graph = None
 _datastore = None
+_checkpointer = MemorySaver()
+
+
+def init_state(_: TutorialState, config: RunnableConfig):
+    """Initialize the default state for the tutorial workflow.
+
+    Args:
+        _: TutorialState (unused, for function signature compatibility)
+        config: RunnableConfig for accessing configuration parameters
+
+    Returns:
+        dict: Default state dictionary with search permission setting
+    """
+    configurable = Configuration.from_runnable_config(config)
+
+    default_state = {
+        "search_permission": YesNoAsk.from_string(
+            configurable.search_permission
+        )
+    }
+
+    return default_state
 
 
 def initialize(
     datastore: DatastoreManager | None = None,
+    configuration: Configuration = Configuration(),
 ) -> Tuple[DatastoreManager, StateGraph]:
+    """Initialize and configure the LangGraph StateGraph with all nodes and edges.
+
+    Creates a complete workflow graph with research, search, and routing nodes.
+    Sets up datastore for RAG operations and configures node connections.
+
+    Args:
+        datastore: Optional pre-configured DatastoreManager instance
+        configuration: Configuration object for system settings
+
+    Returns:
+        tuple: (DatastoreManager instance, configured StateGraph builder)
+    """
     if datastore is None:
         datastore = DatastoreManager(
             config=Configuration()
@@ -349,6 +499,7 @@ def initialize(
 
     # graph_builder.add_node(route_is_relevant)
     # graph_builder.add_node(route_is_complete, defer=True)
+    graph_builder.add_node(init_state)
     graph_builder.add_node(research)
     graph_builder.add_node(search_help)
     graph_builder.add_node(
@@ -363,11 +514,12 @@ def initialize(
     # )
     graph_builder.add_node(route_is_relevant)
     graph_builder.add_node(route_is_complete, defer=True)
+    graph_builder.add_edge(START, init_state.__name__)
 
-    graph_builder.add_edge(START, route_is_relevant.__name__)
+    graph_builder.add_edge(init_state.__name__, route_is_relevant.__name__)
     graph_builder.add_edge(research.__name__, search_help.__name__)
     graph_builder.add_edge(research.__name__, search_rag.__name__)
-    graph_builder.add_edge(search_help.__name__, route_is_complete.__name__)
+    # graph_builder.add_edge(search_help.__name__, route_is_complete.__name__)
     graph_builder.add_edge(search_rag.__name__, route_is_complete.__name__)
 
     graph_builder.add_edge(write_answer.__name__, END)
@@ -391,6 +543,7 @@ async def graph(config: RunnableConfig = None):
     """
     global _compiled_graph
     global _datastore
+    global _checkpointer
 
     # Initialize datastore using asyncio.to_thread to avoid blocking
     initialize_datastore: bool = _datastore is None
@@ -404,7 +557,7 @@ async def graph(config: RunnableConfig = None):
     # Initialize and compile graph synchronously (blocking as intended)
     if _compiled_graph is None:
         _datastore, graph_builder = initialize(_datastore)
-        _compiled_graph = graph_builder.compile()
+        _compiled_graph = graph_builder.compile(checkpointer=_checkpointer)
 
     # Start datastore population as background task (non-blocking)
     if initialize_datastore:

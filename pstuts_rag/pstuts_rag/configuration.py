@@ -68,6 +68,8 @@ class Configuration:
     )
     n_context_docs: int = int(os.environ.get("N_CONTEXT_DOCS", "2"))
 
+    search_permission: str = str(os.environ.get("EVA_SEARCH_PERMISSION", "no"))
+
     @classmethod
     def from_runnable_config(
         cls, config: Optional[RunnableConfig] = None
