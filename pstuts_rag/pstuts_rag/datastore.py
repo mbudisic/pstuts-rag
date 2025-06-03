@@ -3,7 +3,7 @@ import json
 import glob
 import aiofiles
 from pathlib import Path
-from typing import List, Dict, Iterator, Any, Callable, Optional
+from typing import List, Dict, Iterator, Any, Callable, Optional, Self
 import uuid
 import logging
 
@@ -242,7 +242,7 @@ class DatastoreManager:
         """
         return self.loading_complete.is_set()
 
-    def add_completion_callback(self, callback: Callable):
+    def add_completion_callback(self, callback: Callable) -> Self:
         """Add a callback to be called when data loading completes.
 
         Args:
@@ -261,6 +261,8 @@ class DatastoreManager:
         else:
             # Loading not complete, add to callbacks list
             self._completion_callbacks.append(callback)
+
+        return self
 
     async def wait_for_loading(self, timeout: Optional[float] = None):
         """Wait for data loading to complete.
