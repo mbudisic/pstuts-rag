@@ -15,7 +15,7 @@ dependencies = [
     "langgraph>=0.4.8",
     "qdrant-client>=1.8.0",
     # API integration
-    "chainlit>=2.0.4",
+    "chainlit",
     "requests>=2.31.0",
     "python-dotenv>=0.9.9",
     # Utilities

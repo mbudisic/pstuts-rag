@@ -15,6 +15,17 @@ Check out the configuration reference at https://huggingface.co/docs/hub/spaces-
 
 An agentic RAG system for the PsTuts dataset that provides AI-powered answers to Adobe Photoshop questions using video tutorial transcripts.
 
+## 🎨 Visual Theme
+
+The application features a beautiful **sepia-toned color scheme** that gives it a vintage, artistic feel perfect for Adobe Photoshop tutorials:
+
+- 🌅 **Light Theme** (default): Warm cream and tan colors reminiscent of old photography
+- 🌙 **Dark Theme**: Rich coffee and amber tones for comfortable nighttime usage
+- 🖼️ **Sepia Filter**: Subtle sepia treatment on images for visual consistency
+- ⚡ **Smooth Transitions**: Elegant animations when switching between themes
+
+Users can toggle between light and dark variants using the theme switcher in the interface.
+
 ## 🚀 Getting Started
 
 1. Install dependencies:

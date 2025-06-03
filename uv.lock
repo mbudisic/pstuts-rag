@@ -3806,7 +3806,7 @@ requires-dist = [
     { name = "aiofiles", specifier = ">=23.1.0" },
     { name = "bidict", specifier = ">=0.23.1" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=22.0.0" },
-    { name = "chainlit", specifier = ">=2.0.4" },
+    { name = "chainlit" },
     { name = "datasets", specifier = ">=3.6.0" },
     { name = "deptry", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "fastapi", marker = "extra == 'web'", specifier = ">=0.115.3,<0.116" },

@@ -134,6 +134,57 @@ This feature enables controlled access to external resources while maintaining a
 - **`evaluator_utils.py`**: RAG evaluation utilities using RAGAS framework
 - **Notebook-based evaluation**: `evaluate_rag.ipynb` for systematic testing
 
+## 🎨 UI Customization & Theming
+
+### Sepia Theme Implementation 🖼️
+
+The application features a custom **sepia-toned color scheme** implemented through CSS variables and theme switching:
+
+#### 📁 Theme Files
+- **`public/sepia-theme.css`**: Custom CSS file with sepia color schemes
+- **`.chainlit/config.toml`**: Configuration enabling custom CSS and default theme
+
+#### 🎨 Color Palette Design
+```css
+/* Light Sepia Colors */
+--sepia-lightest: #faf6f0    /* Warm cream background */
+--sepia-lighter: #f4ede1     /* Secondary background */
+--sepia-light: #e8d5b7       /* Tertiary background */
+--sepia-medium: #d4b896      /* Border and accent */
+--sepia-dark: #c19a6b        /* Darker accents */
+--sepia-darker: #a67c52      /* Strong borders */
+--sepia-darkest: #8b5a3c     /* Deep contrast */
+
+/* Dark Sepia Colors */
+--sepia-dark-bg: #2c1810     /* Rich coffee background */
+--sepia-dark-bg-secondary: #3a2318  /* Warmer secondary */
+--sepia-dark-bg-tertiary: #4a2d20   /* Amber tertiary */
+```
+
+#### 🔧 Technical Implementation
+- **CSS Variables**: Dynamic theming with `--custom-property` pattern
+- **Theme Detection**: `[data-theme="light"]` and `[data-theme="dark"]` selectors
+- **Smooth Transitions**: `transition` properties for seamless theme switching
+- **Component Styling**: Custom styling for chat messages, buttons, inputs, sidebar
+- **Image Treatment**: Subtle `filter: sepia(20%)` on images for visual consistency
+
+#### ⚙️ Configuration Setup
+```toml
+# .chainlit/config.toml
+[UI]
+default_theme = "light"           # Set light theme as default
+custom_css = "/public/sepia-theme.css"  # Enable custom styling
+```
+
+#### 🎯 Features
+- **Responsive Design**: Adapts to both light and dark preferences
+- **Accessibility**: Maintains sufficient contrast ratios in both themes
+- **Visual Cohesion**: Unified sepia treatment across all UI elements
+- **Performance**: CSS-only implementation with minimal runtime overhead
+- **User Control**: Native Chainlit theme switcher toggles between variants
+
+The sepia theme creates a warm, nostalgic atmosphere perfect for Adobe Photoshop tutorials, giving the application a distinctive visual identity that stands out from standard blue/gray interfaces. 📸✨
+
 ## 🚀 Running the Applications
 
 ### Multi-Agent RAG (Recommended) 🤖
