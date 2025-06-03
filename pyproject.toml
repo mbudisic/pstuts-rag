@@ -12,7 +12,7 @@ dependencies = [
     "langchain-experimental>=0.3.4",
     "langchain-openai",
     "langchain-qdrant>=0.2.0",
-    "langgraph>=0.2.55",
+    "langgraph>=0.4.8",
     "qdrant-client>=1.8.0",
     # API integration
     "chainlit>=2.0.4",
