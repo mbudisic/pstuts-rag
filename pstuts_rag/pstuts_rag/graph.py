@@ -118,7 +118,7 @@ def create_agent(
 
 
 def create_tavily_node(
-     name: str = "AdobeHelp", config: Configuration = Configuration() ) -> Callable
+     name: str = "AdobeHelp", config: Configuration = Configuration() ) -> Callable:
     """Initialize tool, agent, and node for Tavily search of helpx.adobe.com.
 
     This function sets up a search agent that can query Adobe Photoshop help topics

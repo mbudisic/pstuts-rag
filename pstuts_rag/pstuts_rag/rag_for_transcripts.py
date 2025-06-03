@@ -58,10 +58,10 @@ def post_process_response(
         else answer.content
     )
     # Only append references if the model provided a substantive answer
-    if "I don't know" not in answer.content:
-        text_w_references = "\n".join(
-            [str(text_w_references), "**REFERENCES**", references]
-        )
+    # if "I don't know" not in answer.content:
+    #     text_w_references = "\n".join(
+    #         [str(text_w_references), "**REFERENCES**", references]
+    #     )
 
     # Create new message with references and preserve original context metadata
     output: AIMessage = answer.model_copy(

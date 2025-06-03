@@ -1,0 +1,6 @@
+def enter_chain(message: str):
+    results = {
+        "messages": [HumanMessage(content=message)],
+        "team_members": ["VideoArchiveSearch", "AdobeHelp"],
+    }
+    return results

@@ -231,7 +231,7 @@ class DatastoreManager:
             VectorStoreRetriever: The configured retriever
         """
         return self.vector_store.as_retriever(
-            search_kwargs={"k": n_context_docs}
+            search_kwargs={"k": int(n_context_docs)}
         )
 
     def is_ready(self) -> bool:

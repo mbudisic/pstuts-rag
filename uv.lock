@@ -1880,6 +1880,22 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain-tavily"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "langchain" },
+    { name = "langchain-core" },
+    { name = "mypy" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/df/63/e7c41f837914806b3c255c4c46d0948528101279656a523b7e11be740e06/langchain_tavily-0.2.0.tar.gz", hash = "sha256:b400525d6d2c28902d2acb25af28751aa1a9a1f99c7880eea4d701f3993736fb", size = 19813 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b5/a7/2e59086df6006ac09a8d8d8f43683ff2f84608d69984bf1593c92faeefb0/langchain_tavily-0.2.0-py3-none-any.whl", hash = "sha256:a5b780f96c80d5a3e7c933da2d603cb26ba94b10f7c1ac4b89ce5b123c7541b4", size = 23580 },
+]
+
+[[package]]
 name = "langchain-text-splitters"
 version = "0.3.8"
 source = { registry = "https://pypi.org/simple" }
@@ -3741,6 +3757,7 @@ dependencies = [
     { name = "langchain-ollama" },
     { name = "langchain-openai" },
     { name = "langchain-qdrant" },
+    { name = "langchain-tavily" },
     { name = "langgraph" },
     { name = "langgraph-cli", extra = ["inmem"] },
     { name = "langsmith" },
@@ -3810,6 +3827,7 @@ requires-dist = [
     { name = "langchain-ollama", specifier = ">=0.3.2" },
     { name = "langchain-openai" },
     { name = "langchain-qdrant", specifier = ">=0.2.0" },
+    { name = "langchain-tavily", specifier = ">=0.2.0" },
     { name = "langgraph", specifier = ">=0.2.55" },
     { name = "langgraph-cli", extras = ["inmem"], specifier = ">=0.1.55" },
     { name = "langsmith", specifier = ">=0.0.50" },

@@ -164,3 +164,67 @@ is relevant to Adobe Photoshop, otherwise no.
 
 Relevant?
 """
+
+NODE_PROMPTS[
+    "search_summary"
+] = """
+<QUERY>
+{query}
+</QUERY>
+<WEBSITE_TEXT>
+{text}
+</WEBSITE_TEXT>
+
+<TASK>
+Use WEBSITE_TEXT to produce a summarized
+answer to the QUERY.
+
+Aim for the audience at a level of an advanced high school student.
+Do not invent material that is not in the text.
+
+Your output should be at most 200 words long.
+</TASK>
+"""
+
+NODE_PROMPTS[
+    "completeness"
+] = """
+<QUERY>
+{query}
+</QUERY>
+<RESEARCH>
+{responses}
+</RESEARCH>
+
+<TASK>
+Your goal is to evaluate if RESEARCH is sufficiently detailed to provide a comprehensive
+and clear answer for QUERY.
+
+If the RESEARCH is sufficiently complete, state "yes" as your decision. 
+
+If new terms were introduced in RESEARCH that are not sufficiently explained,
+or the QUERY is not sufficiently addressed, response as "no".
+</TASK>
+
+<FINAL_CHECK>
+Your response must be either "yes" or "no".
+</FINAL_CHECK>
+"""
+
+NODE_PROMPTS[
+    "final_answer"
+] = """
+<QUERY>
+{query}
+</QUERY>
+<RESEARCH>
+{responses}
+</RESEARCH>
+
+<TASK>
+Use the content in RESEARCH to provide a detailed answer to the QUERY.
+Do not add the material, fully ground yourself in the research context.
+
+End your response with "I hope you're happy!".
+</TASK>
+"""
