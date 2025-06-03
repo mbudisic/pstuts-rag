@@ -111,3 +111,56 @@ VideoArchiveSearch: exporting vector layers from After Effects
 And, once there's no further research needed:
 FINISH
 """
+
+NODE_PROMPTS = {}
+
+NODE_PROMPTS[
+    "research"
+] = """
+<QUERY>
+{query}
+</QUERY>
+
+<HISTORY>
+{history}
+</HISTORY>
+
+<TASK>
+Your job is to generate good succinct search phrases based on 
+1. user's query (QUERY)
+2. research history (HISTORY)
+The primary topic is Adobe Photoshop use cases. Search phrases
+will be used to look up tutorial videos and online help.
+
+It is important to ground yourself in provided context (QUERY + HISTORY). Do not deviate
+or invent terms adjacent to the prompt provided.
+
+Write a short 1-10 word search that can be used to look up the most relevant
+topic for QUERY that is **not yet** analyzed in HISTORY.
+</TASK>
+
+
+Generate the search phrase here:
+"""
+
+NODE_PROMPTS[
+    "relevance"
+] = """
+<QUERY>
+{query}
+</QUERY>
+
+<TASK>
+You are a gatekeeper for the system.
+Determine of the given QUERY is within the scope 
+of Adobe Photoshop general topic area.
+
+If it is relevant, respond with "yes",
+otherwise respond with "no".
+
+Your response should be a single word: yes if the QUERY
+is relevant to Adobe Photoshop, otherwise no.
+</TASK>
+
+Relevant?
+"""

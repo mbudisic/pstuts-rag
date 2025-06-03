@@ -7,3 +7,4 @@ __pycache__/
 .vscode/qdrant_local_db/
 .embeddings_cache/
 notebooks/*/
+*.pckl
