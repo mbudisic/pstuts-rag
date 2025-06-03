@@ -8,7 +8,13 @@ from langchain_core.runnables import RunnableConfig
 
 
 class ModelAPI(Enum):
-    """Enum for supported embedding API providers."""
+    """Enum for supported embedding API providers.
+
+    Attributes:
+        OPENAI: OpenAI API provider
+        HUGGINGFACE: Hugging Face API provider
+        OLLAMA: Ollama API provider
+    """
 
     OPENAI = "OPENAI"
     HUGGINGFACE = "HUGGINGFACE"
@@ -66,7 +72,17 @@ class Configuration:
     def from_runnable_config(
         cls, config: Optional[RunnableConfig] = None
     ) -> "Configuration":
-        """Create a Configuration instance from a RunnableConfig."""
+        """Create a Configuration instance from a RunnableConfig.
+
+        Args:
+            config: Optional RunnableConfig containing configurable parameters
+
+        Returns:
+            Configuration: New Configuration instance with values from config
+
+        Note:
+            Priority order: environment variables > configurable dict values > field defaults
+        """
         configurable = (
             config["configurable"]
             if config and "configurable" in config
@@ -82,7 +98,14 @@ class Configuration:
         return cls(**{k: v for k, v in values.items() if v})
 
     def print(self, print_like_function=logging.info) -> None:
-        """Log all configuration parameters using logging.debug."""
+        """Print all configuration parameters using the provided logging function.
+
+        Args:
+            print_like_function: Function to use for printing (defaults to logging.info)
+
+        Returns:
+            None
+        """
         print_like_function("Configuration parameters:")
         for field in fields(self):
             if field.init:

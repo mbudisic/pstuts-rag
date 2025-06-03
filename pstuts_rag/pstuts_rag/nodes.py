@@ -41,6 +41,15 @@ datastore.add_completion_callback(lambda: logging.warning("Loading complete."))
 
 
 def research(state: TutorialState, config: RunnableConfig):
+    """Generate a research query based on conversation history and current query.
+
+    Args:
+        state: Current TutorialState containing messages and query
+        config: RunnableConfig for accessing configuration parameters
+
+    Returns:
+        dict: Updated state with new message and incremented loop count
+    """
 
     configurable = Configuration.from_runnable_config(config)
     cls = ChatAPISelector.get(configurable.llm_api, ChatOpenAI)
@@ -67,6 +76,15 @@ def research(state: TutorialState, config: RunnableConfig):
 async def search_help(
     state: TutorialState, config: RunnableConfig | None = None
 ):
+    """Search Adobe Help documentation for relevant information.
+
+    Args:
+        state: Current TutorialState containing the search query
+        config: Optional RunnableConfig for accessing configuration parameters
+
+    Returns:
+        dict: Updated state with search results message and URL references
+    """
 
     configurable = (
         Configuration()
@@ -113,6 +131,15 @@ async def search_help(
 
 
 async def search_rag(state: TutorialState, config: RunnableConfig):
+    """Search tutorial transcripts using RAG (Retrieval-Augmented Generation).
+
+    Args:
+        state: Current TutorialState containing the search query
+        config: RunnableConfig for accessing configuration parameters
+
+    Returns:
+        dict: Updated state with RAG response and video references
+    """
 
     chain = create_transcript_rag_chain(datastore, config)
 
@@ -125,10 +152,28 @@ async def search_rag(state: TutorialState, config: RunnableConfig):
 
 
 def join(state: TutorialState, config: RunnableConfig):
+    """Join/merge results from multiple search sources.
+
+    Args:
+        state: Current TutorialState with search results
+        config: RunnableConfig for accessing configuration parameters
+
+    Returns:
+        None: Currently a placeholder function
+    """
     pass
 
 
 def write_answer(state: TutorialState, config: RunnableConfig):
+    """Write a preliminary answer (placeholder function).
+
+    Args:
+        state: Current TutorialState with research data
+        config: RunnableConfig for accessing configuration parameters
+
+    Returns:
+        None: Currently a placeholder function
+    """
     pass
 
 
@@ -136,10 +181,23 @@ def write_answer(state: TutorialState, config: RunnableConfig):
 
 
 class YesNoDecision(BaseModel):
+    """Model for yes/no decision responses from LLM.
+
+    Attributes:
+        decision: The yes or no decision as a literal string
+    """
+
     decision: Literal["yes", "no"] = Field(description="Yes or no decision.")
 
 
 class URLReference(BaseModel):
+    """Model for URL reference with summary.
+
+    Attributes:
+        summary: Text summary of the URL content
+        url: The HTTP URL being referenced
+    """
+
     summary: str
     url: HttpUrl
 
@@ -147,6 +205,15 @@ class URLReference(BaseModel):
 def route_is_relevant(
     state: TutorialState, config: RunnableConfig
 ) -> Command[Literal["research", "write_answer"]]:
+    """Route based on whether the query is relevant to Photoshop tutorials.
+
+    Args:
+        state: Current TutorialState containing the user query
+        config: RunnableConfig for accessing configuration parameters
+
+    Returns:
+        Command: Navigation command to either 'research' or 'write_answer'
+    """
 
     # retrieve the LLM
     configurable = Configuration.from_runnable_config(config)
@@ -182,6 +249,13 @@ def route_is_relevant(
 
 
 class IsComplete(BaseModel):
+    """Model for research completion decision.
+
+    Attributes:
+        decision: Whether research is complete (yes/no)
+        new_query: Query string for additional research if needed
+    """
+
     decision: Literal["yes", "no"] = Field(description="Yes or no decision.")
     new_query: str = Field(description="Query for additional research.")
 
@@ -189,6 +263,15 @@ class IsComplete(BaseModel):
 def route_is_complete(
     state: TutorialState, config: RunnableConfig
 ) -> Command[Literal["research", "write_answer"]]:
+    """Route based on whether research is complete or more is needed.
+
+    Args:
+        state: Current TutorialState with research progress
+        config: RunnableConfig for accessing configuration parameters
+
+    Returns:
+        Command: Navigation command to either 'research' or 'write_answer'
+    """
 
     # retrieve the LLM
     configurable = Configuration.from_runnable_config(config)
@@ -234,6 +317,15 @@ def route_is_complete(
 
 
 def write_answer(state: TutorialState, config: RunnableConfig):
+    """Generate the final answer based on all research collected.
+
+    Args:
+        state: Current TutorialState with all research data
+        config: RunnableConfig for accessing configuration parameters
+
+    Returns:
+        dict: Updated state with the final answer message
+    """
 
     # retrieve the LLM
     configurable = Configuration.from_runnable_config(config)
