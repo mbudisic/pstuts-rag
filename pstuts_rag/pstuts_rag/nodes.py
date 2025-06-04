@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Annotated, Any, Callable, Dict, Literal, Tuple, Union
 import functools
 import asyncio
+import os
 import logging
 import operator
 from langchain_openai import ChatOpenAI
@@ -18,8 +19,10 @@ from langchain_tavily import TavilyExtract
 
 from pydantic import BaseModel, Field, HttpUrl
 
+from langgraph.types import interrupt
+from langgraph.checkpoint.memory import MemorySaver
 
-from pstuts_rag.utils import ChatAPISelector
+from pstuts_rag.utils import get_chat_api
 from pstuts_rag.configuration import Configuration
 from pstuts_rag.datastore import DatastoreManager
 from pstuts_rag.prompts import NODE_PROMPTS
@@ -68,43 +71,48 @@ class TutorialState(MessagesState):
     url_references: Annotated[list[Dict], operator.add]
     loop_count: int
     search_permission: YesNoAsk
+    search_query: Annotated[list[str], operator.add]
+
+
+# Define your FinalAnswer message type as a subclass of BaseMessage
+class FinalAnswer(AIMessage):
+    """Custom message type for final streaming responses"""
+
+    type: str = "FinalAnswer"
+
+    def __init__(self, content: str = "", **kwargs):
+        super().__init__(content=content, **kwargs)
+
+    @classmethod
+    def from_base_message(cls, base_msg: BaseMessage) -> "FinalAnswer":
+        """Create FinalAnswer from any BaseMessage, copying all relevant fields"""
+        return cls(
+            content=base_msg.content,
+            additional_kwargs=getattr(base_msg, "additional_kwargs", {}),
+            response_metadata=getattr(base_msg, "response_metadata", {}),
+            name=getattr(base_msg, "name", None),
+            id=getattr(base_msg, "id", None),
+        )
 
 
 class QueryMessage(AIMessage):
-    """A message class representing a research query, retaining all attributes from any message type."""
+    """Custom message type for final streaming responses"""
+
+    type: str = "QueryMessage"
+
+    def __init__(self, content: str = "", **kwargs):
+        super().__init__(content=content, **kwargs)
 
     @classmethod
-    def from_message(cls, message: BaseMessage) -> "QueryMessage":
-        """Create a QueryMessage from any BaseMessage type, retaining all attributes.
-
-        Args:
-            message: Any BaseMessage instance (HumanMessage, AIMessage, SystemMessage, etc.)
-
-        Returns:
-            QueryMessage: New QueryMessage instance with all attributes from the source message
-        """
-        # Get all attributes from the source message
-        message_dict = message.model_dump()
-
-        # Create new QueryMessage with all attributes preserved
-        return cls(**message_dict)
-
-    def __init__(self, content: Union[str, BaseMessage] = "", **kwargs):
-        """Initialize QueryMessage from content string or any BaseMessage type.
-
-        Args:
-            content: Either a string content or a BaseMessage instance
-            **kwargs: Additional keyword arguments for the message
-        """
-        if isinstance(content, BaseMessage):
-            # If content is a BaseMessage, convert it
-            source_dict = content.model_dump()
-            # Merge kwargs into source_dict, with kwargs taking precedence
-            source_dict.update(kwargs)
-            super().__init__(**source_dict)
-        else:
-            # Normal string content initialization
-            super().__init__(content=content, **kwargs)
+    def from_base_message(cls, base_msg: BaseMessage) -> "QueryMessage":
+        """Create QueryMessage from any BaseMessage, copying all relevant fields"""
+        return cls(
+            content=base_msg.content,
+            additional_kwargs=getattr(base_msg, "additional_kwargs", {}),
+            response_metadata=getattr(base_msg, "response_metadata", {}),
+            name=getattr(base_msg, "name", None),
+            id=getattr(base_msg, "id", None),
+        )
 
 
 def research(state: TutorialState, config: RunnableConfig):
@@ -119,51 +127,45 @@ def research(state: TutorialState, config: RunnableConfig):
     """
 
     configurable = Configuration.from_runnable_config(config)
-    cls = ChatAPISelector.get(configurable.llm_api, ChatOpenAI)
+    cls = get_chat_api(configurable.llm_api)
     llm = cls(model=configurable.llm_tool_model, temperature=0)
 
     history = [
         msg.content
         for msg in state["messages"]
-        if getattr(msg, "role", "") == "ai"
+        if not (isinstance(msg, HumanMessage))
     ]
 
     prompt = NODE_PROMPTS["research"].format(
-        history=history, query=state["query"]
+        history=history,
+        query=state["query"],
+        previous_queries="\n\n".join(state["search_query"][0:-1]),
     )
 
     search_query = llm.invoke([HumanMessage(content=prompt)])
 
     return {
-        "messages": [QueryMessage(search_query)],
+        "messages": [QueryMessage.from_base_message(search_query)],
         "loop_count": state.get("loop_count", 0) + 1,
+        "search_query": [search_query.content],
     }
 
 
-from langgraph.types import interrupt
-from langgraph.checkpoint.memory import MemorySaver
-
-
 async def search_help(
-    state: TutorialState, config: RunnableConfig | None = None
+    state: TutorialState, config: RunnableConfig
 ) -> Command[Literal["search_help", "route_is_complete"]]:
     """Search Adobe Help documentation for relevant information.
 
     Args:
         state: Current TutorialState containing the search query
-        config: Optional RunnableConfig for accessing configuration parameters
+        config: RunnableConfig for accessing configuration parameters
 
     Returns:
         dict: Updated state with search results message and URL references
     """
 
-    configurable = (
-        Configuration()
-        if not config
-        else Configuration.from_runnable_config(config)
-    )
-
-    cls = ChatAPISelector.get(configurable.llm_api, ChatOpenAI)
+    configurable = Configuration.from_runnable_config(config)
+    cls = get_chat_api(configurable.llm_api)
     llm = cls(model=configurable.llm_tool_model, temperature=0)
     prompt = NODE_PROMPTS["search_summary"]
 
@@ -175,12 +177,7 @@ async def search_help(
         include_images=True,
         response_format="content_and_artifact",  # Always returns artifacts
     )
-    queries = [
-        msg.content
-        for msg in state["messages"]
-        if isinstance(msg, QueryMessage)
-    ]
-    query = queries[-1]
+    query = state["search_query"][-1]
 
     decision = state["search_permission"]
     if decision == YesNoAsk.ASK:
@@ -256,26 +253,14 @@ async def search_rag(
     """
 
     chain = create_transcript_rag_chain(datastore, config)
+    query = state["search_query"][-1]
 
-    response = await chain.ainvoke({"question": state["messages"][-1].content})
+    response = await chain.ainvoke({"question": query})
 
     return {
         "messages": [response],
         "video_references": response.additional_kwargs["context"],
     }
-
-
-def write_answer(state: TutorialState, config: RunnableConfig):
-    """Write a preliminary answer (placeholder function).
-
-    Args:
-        state: Current TutorialState with research data
-        config: RunnableConfig for accessing configuration parameters
-
-    Returns:
-        None: Currently a placeholder function
-    """
-    pass
 
 
 ## MISSING: CONDITIONAL NODES
@@ -304,7 +289,8 @@ class URLReference(BaseModel):
 
 
 def route_is_relevant(
-    state: TutorialState, config: RunnableConfig
+    state: TutorialState,
+    config: RunnableConfig,
 ) -> Command[Literal["research", "write_answer"]]:
     """Route based on whether the query is relevant to Photoshop tutorials.
 
@@ -318,10 +304,12 @@ def route_is_relevant(
 
     # retrieve the LLM
     configurable = Configuration.from_runnable_config(config)
-    cls = ChatAPISelector.get(configurable.llm_api, ChatOpenAI)
-    llm = cls(model=configurable.llm_tool_model).with_structured_output(
-        YesNoDecision
-    )
+    cls = get_chat_api(configurable.llm_api)
+    logging.info("LLM SELECTED: %s", cls)
+
+    llm = cls(
+        model=configurable.llm_tool_model, temperature=0
+    ).with_structured_output(YesNoDecision)
 
     human_messages = [
         msg.content
@@ -389,7 +377,9 @@ def route_is_complete(
             goto="write_answer",
         )
 
-    cls = ChatAPISelector.get(configurable.llm_api, ChatOpenAI)
+    cls = get_chat_api(configurable.llm_api)
+    logging.info("LLM SELECTED: %s", cls)
+
     llm = cls(model=configurable.llm_tool_model).with_structured_output(
         YesNoDecision
     )
@@ -430,7 +420,8 @@ def write_answer(state: TutorialState, config: RunnableConfig):
 
     # retrieve the LLM
     configurable = Configuration.from_runnable_config(config)
-    cls = ChatAPISelector.get(configurable.llm_api, ChatOpenAI)
+    cls = get_chat_api(configurable.llm_api)
+
     llm = cls(model=configurable.llm_tool_model)
 
     ai_messages = list(
@@ -442,7 +433,9 @@ def write_answer(state: TutorialState, config: RunnableConfig):
         query=state["query"], responses="\n\n".join(ai_messages)
     )
 
-    final_answer = llm.invoke([HumanMessage(content=prompt)])
+    final_answer = FinalAnswer.from_base_message(
+        llm.invoke([HumanMessage(content=prompt)])
+    )
 
     return {"messages": [final_answer]}
 
@@ -453,7 +446,7 @@ _datastore = None
 _checkpointer = MemorySaver()
 
 
-def init_state(_: TutorialState, config: RunnableConfig):
+def init_state(state: TutorialState, config: RunnableConfig):
     """Initialize the default state for the tutorial workflow.
 
     Args:
@@ -464,12 +457,15 @@ def init_state(_: TutorialState, config: RunnableConfig):
         dict: Default state dictionary with search permission setting
     """
     configurable = Configuration.from_runnable_config(config)
-
     default_state = {
         "search_permission": YesNoAsk.from_string(
             configurable.search_permission
         )
     }
+
+    human = [msg for msg in state["messages"] if isinstance(msg, HumanMessage)]
+    if len(human) > 0 and len(state["query"]) == 0:
+        default_state["query"] = human[0].content
 
     return default_state
 
@@ -525,6 +521,12 @@ def initialize(
     graph_builder.add_edge(write_answer.__name__, END)
 
     return datastore, graph_builder
+
+
+from dotenv import load_dotenv
+
+load_dotenv()
+logging.info("OLLAMA_HOST: %s", os.getenv("OLLAMA_HOST"))
 
 
 async def graph(config: RunnableConfig = None):

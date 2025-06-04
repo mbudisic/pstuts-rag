@@ -10,8 +10,34 @@ from langchain_ollama import ChatOllama
 from langchain_ollama.embeddings import OllamaEmbeddings
 
 from pstuts_rag.configuration import ModelAPI
+import logging
+
+from contextvars import ContextVar
+from functools import wraps
+from typing import Callable, Optional
+import time
+import traceback
+
 
 # Chat model selector dictionary
+ChatAPISelector: Dict[
+    ModelAPI, Type[ChatHuggingFace | ChatOpenAI | ChatOllama]
+] = {
+    ModelAPI.HUGGINGFACE: ChatHuggingFace,
+    ModelAPI.OPENAI: ChatOpenAI,
+    ModelAPI.OLLAMA: ChatOllama,
+}
+
+
+def get_chat_api(input: str):
+
+    logging.info("LLM_API: %s", input)
+    cls = ChatAPISelector[ModelAPI(input)]
+    logging.info("LLM SELECTED: %s", cls)
+
+    return cls
+
+
 """
 ChatAPISelector: Dictionary mapping ModelAPI enum values to their corresponding chat model classes.
 
@@ -42,15 +68,27 @@ Example:
     >>> chat_class = ChatAPISelector[config.llm_api]
     >>> chat_model = chat_class(model="llama2:7b")
 """
-ChatAPISelector: Dict[
-    ModelAPI, Type[ChatHuggingFace | ChatOpenAI | ChatOllama]
-] = {
-    ModelAPI.HUGGINGFACE: ChatHuggingFace,
-    ModelAPI.OPENAI: ChatOpenAI,
-    ModelAPI.OLLAMA: ChatOllama,
-}
+
 
 # Embeddings model selector dictionary
+EmbeddingsAPISelector: Dict[
+    ModelAPI, Type[HuggingFaceEmbeddings | OpenAIEmbeddings | OllamaEmbeddings]
+] = {
+    ModelAPI.HUGGINGFACE: HuggingFaceEmbeddings,
+    ModelAPI.OPENAI: OpenAIEmbeddings,
+    ModelAPI.OLLAMA: OllamaEmbeddings,
+}
+
+
+def get_embeddings_api(input: str):
+
+    logging.info("EMBEDDINGS_API: %s", input)
+    cls = EmbeddingsAPISelector[ModelAPI(input)]
+    logging.info("EMBEDDINGS SELECTED: %s", cls)
+
+    return cls
+
+
 """
 EmbeddingsAPISelector: Dictionary mapping ModelAPI enum values to their corresponding embedding model classes.
 
@@ -83,13 +121,6 @@ Example:
     >>> embeddings_class = EmbeddingsAPISelector[config.embedding_api]
     >>> embeddings = embeddings_class(model="text-embedding-3-small")
 """
-EmbeddingsAPISelector: Dict[
-    ModelAPI, Type[HuggingFaceEmbeddings | OpenAIEmbeddings | OllamaEmbeddings]
-] = {
-    ModelAPI.HUGGINGFACE: HuggingFaceEmbeddings,
-    ModelAPI.OPENAI: OpenAIEmbeddings,
-    ModelAPI.OLLAMA: OllamaEmbeddings,
-}
 
 
 def flatten(lst: List[Any]):

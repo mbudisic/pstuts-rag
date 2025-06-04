@@ -23,8 +23,7 @@ from pstuts_rag.configuration import Configuration, ModelAPI
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 from qdrant_client.models import PointStruct
-
-from pstuts_rag.utils import EmbeddingsAPISelector, flatten, batch
+from pstuts_rag.utils import get_embeddings_api, flatten, batch
 
 
 class DatastoreManager:
@@ -71,9 +70,7 @@ class DatastoreManager:
 
         if embeddings is None:
 
-            cls = EmbeddingsAPISelector.get(
-                config.embedding_api, HuggingFaceEmbeddings
-            )
+            cls = get_embeddings_api(config.embedding_api)
             self.embeddings = cls(model=config.embedding_model)
         else:
             self.embeddings = embeddings
