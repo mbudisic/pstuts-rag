@@ -396,3 +396,36 @@ System: "Do you allow Internet search for query 'What are blend modes?'? Answer 
 User: "no"
 System: [Skips web search, continues with local RAG only]
 ``` 
+
+## 🛠️ Robust HTML Title Extraction
+
+### `get_title_streaming(url)`
+
+This function fetches the HTML from a URL and extracts the page title using all the most common conventions, in this order:
+
+1. `<meta property="og:title" content="...">` (Open Graph, for social sharing)
+2. `<meta name="twitter:title" content="...">` (Twitter Cards)
+3. `<meta name="title" content="...">` (sometimes used for SEO)
+4. `<title>...</title>` (the classic HTML title tag)
+
+It returns the **first** found value as a string, or `None` if no title is found. All extraction is done with BeautifulSoup for maximum reliability and standards compliance.
+
+#### Example usage:
+```python
+from pstuts_rag.utils import get_title_streaming
+url = "https://example.com"
+title = get_title_streaming(url)
+print(title)  # Prints the best available title, or None
+```
+
+---
+
+### 🥣 Requirements
+- This function requires `beautifulsoup4` to be installed:
+  ```bash
+  pip install beautifulsoup4
+  ```
+
+---
+
+> "A page by any other name would still be as sweet... but it's nice to get the right one!" 😄 
