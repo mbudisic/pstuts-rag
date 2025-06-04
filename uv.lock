@@ -3741,6 +3741,7 @@ version = "2025.5.12"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
+    { name = "beautifulsoup4" },
     { name = "bidict" },
     { name = "chainlit" },
     { name = "datasets" },
@@ -3804,6 +3805,7 @@ web = [
 [package.metadata]
 requires-dist = [
     { name = "aiofiles", specifier = ">=23.1.0" },
+    { name = "beautifulsoup4", specifier = ">=4.13.4" },
     { name = "bidict", specifier = ">=0.23.1" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=22.0.0" },
     { name = "chainlit" },

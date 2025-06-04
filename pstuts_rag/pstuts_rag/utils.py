@@ -19,6 +19,10 @@ import time
 import traceback
 
 
+import requests
+import re
+from bs4 import BeautifulSoup
+
 # Chat model selector dictionary
 ChatAPISelector: Dict[
     ModelAPI, Type[ChatHuggingFace | ChatOpenAI | ChatOllama]
@@ -172,3 +176,58 @@ def batch(iterable: List[Any], size: int = 16) -> Iterator[List[Any]]:
     """
     for i in range(0, len(iterable), size):
         yield iterable[i : i + size]
+
+
+def get_title_streaming(url):
+    """
+    Fetches the entire HTML content from the given URL and extracts the page title using common conventions:
+    1. <meta property="og:title" content="...">
+    2. <meta name="twitter:title" content="...">
+    3. <meta name="title" content="...">
+    4. <title>...</title>
+    Returns the first found title as a string, or None if not found.
+    """
+    try:
+        response = requests.get(url, timeout=10)
+        html = response.text
+        soup = BeautifulSoup(html, "html.parser")
+
+        # 1. Open Graph
+        meta_og = soup.find("meta", attrs={"property": "og:title"})
+        if meta_og and meta_og.has_attr("content"):
+            title = meta_og["content"].strip()
+            title = re.sub(r"\s+", " ", title)
+            return title
+
+        # 2. Twitter Card
+        meta_twitter = soup.find("meta", attrs={"name": "twitter:title"})
+        if meta_twitter and meta_twitter.has_attr("content"):
+            title = meta_twitter["content"].strip()
+            title = re.sub(r"\s+", " ", title)
+            return title
+
+        # 3. Meta name="title"
+        meta_name = soup.find("meta", attrs={"name": "title"})
+        if meta_name and meta_name.has_attr("content"):
+            title = meta_name["content"].strip()
+            title = re.sub(r"\s+", " ", title)
+            return title
+
+        # 4. <title>
+        title_tag = soup.find("title")
+        if title_tag and title_tag.string:
+            title = title_tag.string.strip()
+            title = re.sub(r"\s+", " ", title)
+            return title
+
+    except Exception as e:
+        print(f"Error: {e}")
+    return None
+
+
+def get_unique(plain_list: list) -> list:
+    unique_list = []
+    for item in plain_list:
+        if item not in unique_list:
+            unique_list.append(item)
+    return unique_list

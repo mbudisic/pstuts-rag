@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field, HttpUrl
 from langgraph.types import interrupt
 from langgraph.checkpoint.memory import MemorySaver
 
-from pstuts_rag.utils import get_chat_api
+from pstuts_rag.utils import get_chat_api, get_title_streaming
 from pstuts_rag.configuration import Configuration
 from pstuts_rag.datastore import DatastoreManager
 from pstuts_rag.prompts import NODE_PROMPTS
@@ -216,7 +216,7 @@ async def search_help(
 
         urls = list(r["url"] for r in results)
         tool = TavilyExtract(
-            extract_depth="basic",
+            extract_depth="advanced",
             include_images=False,
         )
 
@@ -224,6 +224,10 @@ async def search_help(
 
         if "results" in results:
             all_text = list(r["raw_content"] for r in results["results"])
+
+            for r in results["results"]:
+                r["title"] = get_title_streaming(r["url"])
+
         else:
             all_text = []
 

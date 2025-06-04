@@ -18,6 +18,9 @@ from uuid import uuid4
 
 import logging
 
+from pstuts_rag.utils import get_unique
+import requests
+
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -164,36 +167,35 @@ def format_video_reference(doc: Document):
         display="side",
     )
     video_message = cl.Message(
-        content=f'Watch {video_link.name} (_@ {v["start_min"]}_) for reference',  # text has to include video name
+        content=f'📼 Watch {video_link.name} (_@ {v["start_min"]}_)',  # text has to include video name
         elements=[video_link],
     )
 
     return video_message
 
 
-def format_url_reference(url):
+def format_url_reference(url_ref):
     microlink = "https://api.microlink.io"
     params = {
-        "url": url,
+        "url": url_ref["url"],
         "screenshot": True,
     }
 
     payload = requests.get(microlink, params)
 
-    screenshots = []
+    screenshot = None
     if payload:
         print(f"Successful screenshot\n{payload.json()}")
-        screenshots.append(
-            cl.Image(
-                name=f"Website Preview: {url}",
-                display="side",  # Show in the sidebar
-                url=payload.json()["data"]["screenshot"]["url"],
-            )
+        screenshot = cl.Image(
+            name=f"{url_ref['title']}",
+            display="side",  # Show in the sidebar
+            url=payload.json()["data"]["screenshot"]["url"],
+            content=f"🔗 {url_ref['title']} [(click here))]({url_ref['url']})",
         )
 
-    print(links)
-    msg_references.append(
-        cl.Message(content="\n".join([l.url for l in links]), elements=links)
+    return cl.Message(
+        content=f"🔗 {url_ref['title']} [(click here))]({url_ref['url']})",
+        elements=([screenshot] if screenshot else []),
     )
 
 
@@ -289,8 +291,11 @@ async def main(input_message: cl.Message):
     for msg in response["messages"]:
         await cl.Message(content=msg.content, author=msg.type).send()
 
-    for v in response["video_references"]:
+    for v in get_unique(response["video_references"]):
         await format_video_reference(v).send()
+
+    for u in get_unique(response["url_references"]):
+        await format_url_reference(u).send()
 
 
 if __name__ == "__main__":
