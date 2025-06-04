@@ -124,23 +124,32 @@ NODE_PROMPTS[
 <HISTORY>
 {history}
 </HISTORY>
+<PREVIOUS_SEARCH>
+{previous_queries}
+</PREVIOUS_SEARCH>
 
 <TASK>
-Your job is to generate good succinct search phrases based on 
+Your job is to generate a good succinct search phrases based on 
 1. user's query (QUERY)
 2. research history (HISTORY)
+3. previous search queries (PREVIOUS_SEARCH)
 The primary topic is Adobe Photoshop use cases. Search phrases
-will be used to look up tutorial videos and online help.
+will be used to look through video transcripts describing Photoshop.
+Your output should be 1-10 words long and not include your thinking.
 
-It is important to ground yourself in provided context (QUERY + HISTORY). Do not deviate
-or invent terms adjacent to the prompt provided.
+If HISTORY is empty, just pass the QUERY as your output.
 
-Write a short 1-10 word search that can be used to look up the most relevant
-topic for QUERY that is **not yet** analyzed in HISTORY.
+If HISTORY is not empty, find a Photoshop term or phrase mentioned in HISTORY
+that is NOT mentioned in QUERY and output that term or phrase.
+
 </TASK>
 
+<FINAL_CHECK>
+Pay close attention:Make sure that your output 1. relates to QUERY, 2. contains terms in HISTORY
+that are not mentioned in QUERY, 3. is different than all terms in PREVIOUS_SEARCH.
+Your output is 1-10 words long.
+</FINAL_CHECK>
 
-Generate the search phrase here:
 """
 
 NODE_PROMPTS[
@@ -225,6 +234,7 @@ NODE_PROMPTS[
 Use the content in RESEARCH to provide a detailed answer to the QUERY.
 Do not add the material, fully ground yourself in the research context.
 
+Start your final response with 'ANSWER' and a newline.
 End your response with "I hope you're happy!".
 </TASK>
 """
