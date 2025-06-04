@@ -234,6 +234,9 @@ NODE_PROMPTS[
 Use the content in RESEARCH to provide a detailed answer to the QUERY.
 Do not add the material, fully ground yourself in the research context.
 
+Use easily-readable style, aiming for a high school level reading.
+Emphasize points using emoji.
+
 Start your final response with 'ANSWER' and a newline.
 End your response with "I hope you're happy!".
 </TASK>
