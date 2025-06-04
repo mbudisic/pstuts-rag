@@ -1,28 +1,16 @@
 from pstuts_rag.configuration import Configuration
-import requests
 import asyncio
-import json
-import os
-import getpass
-from typing import List, Tuple
-import re
+from typing import cast
 
 import chainlit as cl
 from dotenv import load_dotenv
 
-from langchain_core.documents import Document
-from langchain_core.language_models import BaseChatModel
-from langchain_core.runnables import Runnable
-from langchain_core.embeddings import Embeddings
 from langgraph.checkpoint.memory import MemorySaver
 
+from langchain_core.messages import HumanMessage
+from langchain_core.runnables import Runnable
 
-from langchain_core.messages import HumanMessage, BaseMessage
-
-
-from pstuts_rag.configuration import Configuration
 from pstuts_rag.datastore import DatastoreManager
-from pstuts_rag.rag_for_transcripts import create_transcript_rag_chain
 from pstuts_rag.nodes import initialize
 
 import nest_asyncio
@@ -30,74 +18,16 @@ from uuid import uuid4
 
 import logging
 
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("langchain").setLevel(logging.WARNING)
+logging.getLogger("langchain").setLevel(logging.INFO)
 
 # Apply nested asyncio to enable nested event loops
 nest_asyncio.apply()
 
 # Generate a unique ID for this application instance
 unique_id = uuid4().hex[0:8]
-
-VIDEOARCHIVE = "VideoArchiveSearch"
-ADOBEHELP = "AdobeHelp"
-
-
-def set_api_key_if_not_present(key_name, prompt_message=""):
-    """
-    Sets an API key in the environment if it's not already present.
-
-    Args:
-        key_name: Name of the environment variable to set
-        prompt_message: Custom prompt message for getpass (defaults to key_name)
-    """
-    if len(prompt_message) == 0:
-        prompt_message = key_name
-    if key_name not in os.environ or not os.environ[key_name]:
-        os.environ[key_name] = getpass.getpass(prompt_message)
-
-
-class ApplicationState:
-    """
-    Maintains the state of the application and its components.
-
-    Attributes:
-        embeddings: Embeddings model for vector operations
-        docs: List of loaded documents
-        qdrant_client: Client for Qdrant vector database
-        vector_store: Vector store for document retrieval
-        datastore_manager: Manager for data storage and retrieval
-        rag_factory: Factory for creating RAG chains
-        llm: Language model instance
-        rag_chain: Retrieval-augmented generation chain
-        ai_graph: Compiled AI agent graph
-        ai_graph_sketch: State graph for AI agent orchestration
-        tasks: List of asyncio tasks
-        hasLoaded: Event to track when loading is complete
-        pointsLoaded: Number of data points loaded into the database
-    """
-
-    config: Configuration = Configuration()
-    ai_graph = None
-    datastore: DatastoreManager = None
-    checkpointer = MemorySaver()
-
-    def __init__(self) -> None:
-        """
-        Initialize the application state and set up environment variables.
-        """
-        load_dotenv()
-        set_api_key_if_not_present("OPENAI_API_KEY")
-        set_api_key_if_not_present("TAVILY_API_KEY")
-        # os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGCHAIN_PROJECT"] = (
-            f"AIE - MBUDISIC - HF - CERT - {unique_id}"
-        )
-        set_api_key_if_not_present("LANGCHAIN_API_KEY")
-
-
-# Initialize global application state
-_app_state = ApplicationState()
 
 
 @cl.on_chat_start
@@ -108,38 +38,34 @@ async def on_chat_start():
     Sets up the language model, vector database components, and spawns tasks
     for database population and graph building.
     """
-    global _app_state
 
-    # Initialize datastore using asyncio.to_thread to avoid blocking
-    initialize_datastore: bool = _app_state.datastore is None or (
-        isinstance(_app_state.datastore, DatastoreManager)
-        and _app_state.datastore.count_docs() == 0
+    configuration = Configuration()
+    # Generate a unique thread_id for this chat session
+    thread_id = f"chat_{uuid4().hex[:8]}"
+    configuration.thread_id = thread_id
+
+    datastore = await asyncio.to_thread(
+        lambda: DatastoreManager(config=configuration).add_completion_callback(
+            lambda: cl.run_sync(
+                cl.Message(content="Datastore loading completed.").send()
+            )
+        )
     )
-    if initialize_datastore:
-        _app_state.datastore = await asyncio.to_thread(
-            lambda: DatastoreManager(
-                config=_app_state.config
-            ).add_completion_callback(
-                lambda: cl.run_sync(
-                    cl.Message(content="Datastore loading completed.").send()
-                )
-            )
-        )
 
+    checkpointer = MemorySaver()
     # Initialize and compile graph synchronously (blocking as intended)
-    if _app_state.ai_graph is None:
-        _app_state.datastore, graph_builder = initialize(_app_state.datastore)
-        _app_state.ai_graph = graph_builder.compile(
-            checkpointer=_app_state.checkpointer
-        )
+    datastore, graph_builder = initialize(datastore)
+    ai_graph = graph_builder.compile(checkpointer=checkpointer)
 
-    # Start datastore population as background task (non-blocking)
-    if initialize_datastore:
-        asyncio.create_task(
-            _app_state.datastore.from_json_globs(
-                _app_state.config.transcript_glob
-            )
-        )
+    asyncio.create_task(
+        datastore.from_json_globs(configuration.transcript_glob)
+    )
+
+    cl.user_session.set("configuration", configuration)
+    cl.user_session.set("datastore", datastore)
+    cl.user_session.set("checkpointer", checkpointer)
+    cl.user_session.set("ai_graph", ai_graph)
+    cl.user_session.set("thread_id", thread_id)
 
 
 # def process_response(
@@ -225,37 +151,148 @@ async def on_chat_start():
 #         )
 
 #     return streamed_text, msg_references
+from langchain_core.documents import Document
+
+
+def format_video_reference(doc: Document):
+    v = {k: doc.metadata[k] for k in ("title", "source", "start", "stop")}
+
+    v["start_min"] = f"{round(v['start'] // 60)}m:{round(v['start'] % 60)}s"
+    video_link = cl.Video(
+        name=v["title"],
+        url=f"{v['source']}#t={v['start']}",
+        display="side",
+    )
+    video_message = cl.Message(
+        content=f'Watch {video_link.name} (_@ {v["start_min"]}_) for reference',  # text has to include video name
+        elements=[video_link],
+    )
+
+    return video_message
+
+
+def format_url_reference(url):
+    microlink = "https://api.microlink.io"
+    params = {
+        "url": url,
+        "screenshot": True,
+    }
+
+    payload = requests.get(microlink, params)
+
+    screenshots = []
+    if payload:
+        print(f"Successful screenshot\n{payload.json()}")
+        screenshots.append(
+            cl.Image(
+                name=f"Website Preview: {url}",
+                display="side",  # Show in the sidebar
+                url=payload.json()["data"]["screenshot"]["url"],
+            )
+        )
+
+    print(links)
+    msg_references.append(
+        cl.Message(content="\n".join([l.url for l in links]), elements=links)
+    )
+
+
+from langchain.callbacks.base import BaseCallbackHandler
+
+
+class ChainlitCallbackHandler(BaseCallbackHandler):
+    def __init__(self):
+        self.current_step = None
+        self.step_counter = 0
+
+    async def on_chain_start(self, serialized, inputs, **kwargs):
+        try:
+            logging.info(kwargs)
+            if (
+                "name" in kwargs
+                and "tags" in kwargs
+                and len(list(filter(lambda t: "graph" in t, kwargs["tags"])))
+                > 0
+            ):
+                self.step_counter += 1
+                node_name = kwargs["name"]
+                self.current_step = cl.Step(
+                    name=f"{node_name} (step {self.step_counter})"
+                )
+                await self.current_step.__aenter__()
+
+        except Exception as e:
+            self.step_counter += 1
+
+            print(f"Error in on_chain_start: {e}")
+            self.current_step = cl.Step(
+                name=f"Exception step_{self.step_counter}"
+            )
+            await self.current_step.__aenter__()
+
+    async def on_chain_end(self, outputs, **kwargs):
+        try:
+            if self.current_step:
+                # Optional: Add output to the step
+                if outputs:
+                    self.current_step.output = str(outputs)
+
+                # Close the step - this stops the flashing/loading state
+                await self.current_step.__aexit__(None, None, None)
+                self.current_step = None
+
+        except Exception as e:
+            print(f"Error in on_chain_end: {e}")
+            # Even if there's an error, try to close the step
+            if self.current_step:
+                try:
+                    await self.current_step.__aexit__(None, None, None)
+                    self.current_step = None
+                except:
+                    pass
+
+    async def on_chain_error(self, error, **kwargs):
+        """Handle errors and close the step"""
+        try:
+            if self.current_step:
+                self.current_step.output = f"Error: {str(error)}"
+                await self.current_step.__aexit__(None, None, None)
+                self.current_step = None
+        except Exception as e:
+            print(f"Error in on_chain_error: {e}")
 
 
 @cl.on_message
-async def main(user_cl_message: cl.Message):
+async def main(input_message: cl.Message):
     """
     Processes incoming user messages and sends responses.
 
-    Streams the AI agent's response, processes it to extract text and video references,
-    and sends the content back to the user's chat interface.
+    Streams the AI agent's response, processes it to extract text and
+    video references, and sends the content back to the user's chat interface.
 
     Args:
         message: User's input message
     """
-    global _app_state
+    ai_graph = cast(Runnable, cl.user_session.get("ai_graph"))
+    configuration = cl.user_session.get("configuration")
 
-    for s in _app_state.ai_graph.stream(
-        user_cl_message.content, {"recursion_limit": 5}
-    ):
-        if "__end__" not in s:
-            for [node_type, node_response] in s.items():
-                print(f"Processing {node_type} messages")
-                for node_message in node_response["messages"]:
-                    print(f"Message {node_message}")
-                    msg = cl.Message(content="")
-                    text, references = process_response(node_message)
-                    for token in [char for char in text]:
-                        await msg.stream_token(token)
-                    await msg.send()
-                    for m in references:
-                        await m.send()
+    if not configuration:
+        await cl.Message(content="Error: Configuration not found").send()
+        return
+
+    # Convert Configuration to RunnableConfig format
+    config = configuration.to_runnable_config()
+    config["callbacks"] = [ChainlitCallbackHandler()]
+
+    response = await ai_graph.ainvoke({"query": input_message.content}, config)
+
+    for msg in response["messages"]:
+        await cl.Message(content=msg.content, author=msg.type).send()
+
+    for v in response["video_references"]:
+        await format_video_reference(v).send()
 
 
 if __name__ == "__main__":
-    main()
+    # This will start the Chainlit app when run directly
+    pass
