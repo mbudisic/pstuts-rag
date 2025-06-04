@@ -58,7 +58,7 @@ class Configuration:
     )
 
     llm_api: ModelAPI = ModelAPI(
-        os.environ.get("LLM_API", ModelAPI.OPENAI.value)
+        os.environ.get("LLM_API", ModelAPI.OLLAMA.value)
     )
 
     max_research_loops: int = int(os.environ.get("MAX_RESEARCH_LOOPS", "3"))
@@ -69,6 +69,8 @@ class Configuration:
     n_context_docs: int = int(os.environ.get("N_CONTEXT_DOCS", "2"))
 
     search_permission: str = str(os.environ.get("EVA_SEARCH_PERMISSION", "no"))
+
+    thread_id: str = ""
 
     @classmethod
     def from_runnable_config(
@@ -97,6 +99,8 @@ class Configuration:
             for f in fields(cls)
             if f.init
         }
+        logging.info("Configuration:\n%s", values)
+
         return cls(**{k: v for k, v in values.items() if v})
 
     def print(self, print_like_function=logging.info) -> None:
@@ -113,3 +117,24 @@ class Configuration:
             if field.init:
                 value = getattr(self, field.name)
                 print_like_function("  %s: %s", field.name, value)
+
+    def to_runnable_config(self) -> RunnableConfig:
+        """Convert Configuration instance to RunnableConfig format.
+
+        Returns:
+            RunnableConfig: Properly formatted configuration for LangGraph
+        """
+        configurable_dict = {}
+
+        # Add all non-empty configuration fields to configurable
+        for field in fields(self):
+            if field.init:
+                value = getattr(self, field.name)
+                if value:  # Only include non-empty values
+                    configurable_dict[field.name] = value
+
+        # Ensure thread_id is included if set
+        if self.thread_id:
+            configurable_dict["thread_id"] = self.thread_id
+
+        return RunnableConfig(configurable=configurable_dict)
