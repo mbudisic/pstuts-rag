@@ -1,5 +1,7 @@
 # 🛠️ Developer Documentation
 
+> **Note:** The root-level `DEVELOPER.md` is deprecated. This is the canonical developer documentation. 🚦
+
 ## 📦 Project Structure
 
 ```
@@ -13,10 +15,11 @@
 ├── pstuts_rag/                   # Package directory
 │   ├── pstuts_rag/               # Source code
 │   │   ├── __init__.py           # Package initialization
-│   │   ├── configuration.py     # Application configuration settings
+│   │   ├── configuration.py      # Application configuration settings
 │   │   ├── datastore.py          # Vector database and document management
 │   │   ├── rag.py                # RAG chain implementation and factories
-│   │   ├── graph.py              # LangGraph multi-agent implementation
+│   │   ├── rag_for_transcripts.py# RAG chain for video transcripts (reference packing)
+│   │   ├── graph.py              # Agent node creation and LangGraph assembly
 │   │   ├── state.py              # Team state management for agents
 │   │   ├── prompts.py            # System prompts for different agents
 │   │   ├── evaluator_utils.py    # RAG evaluation utilities
@@ -44,6 +47,7 @@
 │   ├── TODO.md                   # Development TODO list
 │   └── chainlit.md               # Chainlit welcome message
 ├── scripts/                      # Utility scripts (currently empty)
+├── public/                       # Theme and static files (see theming section)
 └── README.md                     # User-facing documentation
 ```
 
@@ -82,6 +86,8 @@ pip install -e ".[dev,web]"        # Core + dev + web server
 - **`DatastoreManager`** (`datastore.py`): Manages Qdrant vector store, document loading, and semantic chunking
 - **`RAGChainFactory`** (`rag.py`): Creates retrieval-augmented generation chains with reference compilation
 - **`RAGChainInstance`** (`rag.py`): Encapsulates complete RAG instances with embeddings and vector stores
+- **`RAG for Transcripts`** (`rag_for_transcripts.py`): Implements the RAG chain for searching video transcripts, including reference packing and post-processing for AIMessage responses. Used for context-rich, reference-annotated answers from video data. 🎬
+- **`Graph Assembly`** (`graph.py`): Handles agent node creation, LangGraph assembly, and integration of multi-agent workflows. Provides utilities for building, initializing, and running the agentic graph. 🕸️
 
 #### 🕸️ Multi-Agent System
 - **`PsTutsTeamState`** (`state.py`): TypedDict managing multi-agent conversation state
@@ -138,49 +144,28 @@ This feature enables controlled access to external resources while maintaining a
 
 ### Sepia Theme Implementation 🖼️
 
-The application features a custom **sepia-toned color scheme** implemented through CSS variables and theme switching:
+The application features a custom **sepia-toned color scheme** implemented via `public/theme.json` and Chainlit's theme configuration:
 
 #### 📁 Theme Files
-- **`public/sepia-theme.css`**: Custom CSS file with sepia color schemes
-- **`.chainlit/config.toml`**: Configuration enabling custom CSS and default theme
+- **`public/theme.json`**: Defines the sepia color palette and theme variables
+- **`.chainlit/config.toml`**: Configuration enabling the sepia theme as default
 
 #### 🎨 Color Palette Design
-```css
-/* Light Sepia Colors */
---sepia-lightest: #faf6f0    /* Warm cream background */
---sepia-lighter: #f4ede1     /* Secondary background */
---sepia-light: #e8d5b7       /* Tertiary background */
---sepia-medium: #d4b896      /* Border and accent */
---sepia-dark: #c19a6b        /* Darker accents */
---sepia-darker: #a67c52      /* Strong borders */
---sepia-darkest: #8b5a3c     /* Deep contrast */
-
-/* Dark Sepia Colors */
---sepia-dark-bg: #2c1810     /* Rich coffee background */
---sepia-dark-bg-secondary: #3a2318  /* Warmer secondary */
---sepia-dark-bg-tertiary: #4a2d20   /* Amber tertiary */
-```
-
-#### 🔧 Technical Implementation
-- **CSS Variables**: Dynamic theming with `--custom-property` pattern
-- **Theme Detection**: `[data-theme="light"]` and `[data-theme="dark"]` selectors
-- **Smooth Transitions**: `transition` properties for seamless theme switching
-- **Component Styling**: Custom styling for chat messages, buttons, inputs, sidebar
-- **Image Treatment**: Subtle `filter: sepia(20%)` on images for visual consistency
+Theme colors are defined in `theme.json` and applied through Chainlit's theming system. There is no custom CSS file; all theming is handled via JSON and Chainlit configuration.
 
 #### ⚙️ Configuration Setup
 ```toml
 # .chainlit/config.toml
 [UI]
 default_theme = "light"           # Set light theme as default
-custom_css = "/public/sepia-theme.css"  # Enable custom styling
+custom_theme = "/public/theme.json"  # Enable custom sepia theme
 ```
 
 #### 🎯 Features
 - **Responsive Design**: Adapts to both light and dark preferences
 - **Accessibility**: Maintains sufficient contrast ratios in both themes
 - **Visual Cohesion**: Unified sepia treatment across all UI elements
-- **Performance**: CSS-only implementation with minimal runtime overhead
+- **Performance**: JSON-based theme for minimal runtime overhead
 - **User Control**: Native Chainlit theme switcher toggles between variants
 
 The sepia theme creates a warm, nostalgic atmosphere perfect for Adobe Photoshop tutorials, giving the application a distinctive visual identity that stands out from standard blue/gray interfaces. 📸✨
@@ -296,6 +281,31 @@ When LangGraph Studio accesses the `graph` function, it automatically triggers l
 - **Web search**: Tavily integration targeting `helpx.adobe.com`
 - **State management**: LangGraph for multi-agent coordination
 - **Evaluation**: RAGAS framework for retrieval and generation metrics
+
+## 🆕 Recent Refactors & Enhancements (Spring 2024)
+
+### 🏗️ Modular App Structure & Async Initialization
+- The main application (`app.py`) is now more modular and async-friendly! Initialization of the datastore, agent graph, and session state is handled with care for concurrency and user experience.
+- The agent graph is now referenced as `ai_graph` (formerly `compiled_graph`) for clarity and onboarding ease.
+- Chainlit session and callback management is improved, making it easier to hook into events and extend the app. 🚦
+
+### 🤖 Robust API/Model Selection Logic
+- All API/model selection (for LLMs and embeddings) is now centralized in `utils.py` via `get_chat_api` and `get_embeddings_api`.
+- These functions robustly parse string input to the `ModelAPI` enum, so you can use any case or format (e.g., "openai", "OPENAI", "Ollama") and it will Just Work™.
+- This eliminates a whole class of bugs from mismatched config strings! 🎉
+
+### 🔍 Smarter Search Phrase Generation
+- The search phrase generation logic (in `prompts.py` and node code) now uses previous queries and conversation history to generate unique, context-aware search phrases.
+- This means less repetition, more relevance, and a more natural research workflow for the agents. 🧠✨
+
+### ⚙️ Enhanced LLM API & Configuration
+- The `Configuration` class (`configuration.py`) now supports robust environment variable overrides and easy conversion to/from `RunnableConfig`.
+- All config parameters are logged and managed with dataclass fields, making debugging and onboarding a breeze.
+
+### 🎨 Sepia Theme Update
+- The UI now features a beautiful sepia color palette for a warm, inviting look (see above for details!).
+- Theme files and configuration have been updated for seamless switching between light and dark sepia modes.
+- Perfect for those late-night Photoshop tutorial sessions! ☕🖼️
 
 ## 📚 Resources
 
