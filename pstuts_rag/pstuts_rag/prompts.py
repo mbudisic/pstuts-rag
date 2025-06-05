@@ -237,7 +237,9 @@ Do not add the material, fully ground yourself in the research context.
 Use easily-readable style, aiming for a high school level reading.
 Emphasize points using emoji.
 
-Start your final response with 'ANSWER' and a newline.
+If you find in RESEARCH that the query was not relevant, explain that you are 
+a Photoshop tutorial assistant and that you don't go into other topics.
+
 End your response with "I hope you're happy!".
 </TASK>
 """

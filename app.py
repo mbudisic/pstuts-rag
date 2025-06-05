@@ -13,7 +13,7 @@ from langchain_core.messages import HumanMessage
 from langchain_core.runnables import Runnable
 
 from pstuts_rag.datastore import Datastore
-from pstuts_rag.nodes import FinalAnswer, initialize
+from pstuts_rag.nodes import FinalAnswer, TutorialState, initialize
 
 import nest_asyncio
 from uuid import uuid4
@@ -23,6 +23,8 @@ import logging
 from pstuts_rag.utils import get_unique
 import requests
 import httpx
+import tiktoken
+import re
 
 
 # Track the single active session
@@ -297,6 +299,9 @@ class ChainlitCallbackHandler(BaseCallbackHandler):
             print(f"Error in on_chain_error: {e}")
 
 
+import time
+
+
 @cl.on_message
 async def main(input_message: cl.Message):
     """
@@ -330,11 +335,23 @@ async def main(input_message: cl.Message):
     config = configuration.to_runnable_config()
     config["callbacks"] = [ChainlitCallbackHandler()]
 
-    response = await ai_graph.ainvoke({"query": input_message.content}, config)
+    response = cast(
+        TutorialState,
+        await ai_graph.ainvoke({"query": input_message.content}, config),
+    )
 
     for msg in response["messages"]:
         if isinstance(msg, FinalAnswer):
-            await cl.Message(content=msg.content, author=msg.type).send()
+
+            final_msg = cl.Message(content="", author=msg.type)
+            await final_msg.send()
+            tokens = list(msg.content)
+            for token in tokens:
+                await final_msg.stream_token(token)
+                time.sleep(0.01)
+
+            if final_msg:
+                await final_msg.update()
 
     for v in get_unique(response["video_references"]):
         await format_video_reference(v).send()
