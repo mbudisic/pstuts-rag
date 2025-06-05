@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 
 from langgraph.checkpoint.memory import MemorySaver
 
-from langchain_core.messages import HumanMessage
 from langchain_core.runnables import Runnable
 
 from pstuts_rag.datastore import Datastore
@@ -21,15 +20,10 @@ from uuid import uuid4
 import logging
 
 from pstuts_rag.utils import get_unique
-import requests
 import httpx
-import tiktoken
-import re
-
 
 # Track the single active session
 active_session = {"id": None, "timestamp": None}
-
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -97,89 +91,6 @@ async def on_chat_start():
     cl.user_session.set("thread_id", thread_id)
 
 
-# def process_response(
-#     response_message: BaseMessage,
-# ) -> Tuple[str, List[cl.Message]]:
-#     """
-#     Processes a response from the AI agents.
-
-#     Extracts the main text and video references from the response,
-#     and creates message elements for displaying video content.
-
-#     Args:
-#         response: Response object from the AI agent
-
-#     Returns:
-#         Tuple containing the text response and a list of message elements with video references
-#     """
-#     streamed_text = f"[_from: {response_message.name}_]\n"
-#     msg_references = []
-
-#     if response_message.name == VIDEOARCHIVE:
-#         text, references = pstuts_rag.rag.RAGChainFactory.unpack_references(
-#             str(response_message.content)
-#         )
-#         streamed_text += text
-
-#         if len(references) > 0:
-#             references = json.loads(references)
-#             print(references)
-
-#             for ref in references:
-#                 msg_references.append(
-#                     cl.Message(
-#                         content=(
-#                             f"Watch {ref['title']} from timestamp "
-#                             f"{round(ref['start'] // 60)}m:{round(ref['start'] % 60)}s"
-#                         ),
-#                         elements=[
-#                             cl.Video(
-#                                 name=ref["title"],
-#                                 url=f"{ref['source']}#t={ref['start']}",
-#                                 display="side",
-#                             )
-#                         ],
-#                     )
-#                 )
-#     else:
-#         streamed_text += str(response_message.content)
-
-#         # Find all URLs in the content
-#         urls = re.findall(
-#             r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+[/\w\.-]*(?:\?[/\w\.-=&%]*)?",
-#             str(response_message.content),
-#         )
-#         print(urls)
-#         links = []
-#         # Create a list of unique URLs
-#         for idx, u in enumerate(list(set(urls))):
-
-#             url = "https://api.microlink.io"
-#             params = {
-#                 "url": u,
-#                 "screenshot": True,
-#             }
-
-#             payload = requests.get(url, params)
-
-#             if payload:
-#                 print(f"Successful screenshot\n{payload.json()}")
-#                 links.append(
-#                     cl.Image(
-#                         name=f"Website {idx} Preview: {u}",
-#                         display="side",  # Show in the sidebar
-#                         url=payload.json()["data"]["screenshot"]["url"],
-#                     )
-#                 )
-
-#         print(links)
-#         msg_references.append(
-#             cl.Message(
-#                 content="\n".join([l.url for l in links]), elements=links
-#             )
-#         )
-
-#     return streamed_text, msg_references
 from langchain_core.documents import Document
 
 
@@ -391,9 +302,11 @@ async def main(input_message: cl.Message):
             if final_msg:
                 await final_msg.update()
 
+    # Send all unique video references as separate messages
     for v in get_unique(response["video_references"]):
         await format_video_reference(v).send()
 
+    # Send all unique URL references as separate messages (with screenshots if available)
     url_reference_tasks = [
         format_url_reference(u) for u in get_unique(response["url_references"])
     ]
