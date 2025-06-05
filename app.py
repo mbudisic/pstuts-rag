@@ -2,6 +2,7 @@ from pstuts_rag.configuration import Configuration
 import asyncio
 from typing import cast
 import signal
+from datetime import datetime
 
 import chainlit as cl
 from dotenv import load_dotenv
@@ -21,6 +22,12 @@ import logging
 
 from pstuts_rag.utils import get_unique
 import requests
+import httpx
+
+
+# Track the single active session
+active_session = {"id": None, "timestamp": None}
+
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -42,6 +49,18 @@ async def on_chat_start():
     Sets up the language model, vector database components, and spawns tasks
     for database population and graph building.
     """
+
+    global active_session
+    session_id = cl.context.session.id
+    current_time = datetime.now()
+
+    # Deactivate any previous session
+    active_session = {"id": session_id, "timestamp": current_time}
+
+    await cl.Message(
+        content=f"🟢 **Active Session**\nSession ID: `{session_id[:8]}...`\n\nYou can now send messages.",
+        author="System",
+    ).send()
 
     configuration = Configuration()
     # Generate a unique thread_id for this chat session
@@ -180,27 +199,35 @@ def format_video_reference(doc: Document):
     return video_message
 
 
-def format_url_reference(url_ref):
+async def format_url_reference(url_ref):
     microlink = "https://api.microlink.io"
     params = {
         "url": url_ref["url"],
-        "screenshot": True,
+        "screenshot": {
+            "overlay": {
+                "background": "linear-gradient(225deg, #FF057C 0%, #8D0B93 50%, #321575 100%)",
+                "browser": "dark",
+            }
+        },
     }
 
-    payload = requests.get(microlink, params)
-
     screenshot = None
-    if payload:
-        print(f"Successful screenshot\n{payload.json()}")
-        screenshot = cl.Image(
-            name=f"{url_ref['title']}",
-            display="side",  # Show in the sidebar
-            url=payload.json()["data"]["screenshot"]["url"],
-            content=f"🔗 {url_ref['title']} [(click here))]({url_ref['url']})",
-        )
+    async with httpx.AsyncClient() as client:
+        try:
+            payload = await client.get(microlink, params=params, timeout=30.0)
+            if payload:
+                logging.info(f"Successful screenshot\n{payload.json()}")
+                screenshot = cl.Image(
+                    name=f"{url_ref['title']}",
+                    display="side",  # Show in the sidebar
+                    url=payload.json()["data"]["screenshot"]["url"],
+                    content=f"🔗 {url_ref['title']} [(click here))]({url_ref['url']})",
+                )
+        except Exception as e:
+            logging.error(f"Error fetching screenshot: {e}")
 
     return cl.Message(
-        content=f"🔗 {url_ref['title']} [(click here))]({url_ref['url']})",
+        content=f"🔗 {url_ref['title']} [(click here)]({url_ref['url']})",
         elements=([screenshot] if screenshot else []),
     )
 
@@ -281,6 +308,17 @@ async def main(input_message: cl.Message):
     Args:
         message: User's input message
     """
+    global active_session
+    current_session_id = cl.context.session.id
+
+    # Check if this is the active session
+    if current_session_id != active_session["id"]:
+        await cl.Message(
+            content="🔴 **Inactive Session**\n\nThis tab is no longer active. Please close this tab and use the active session.",
+            author="System",
+        ).send()
+        return  # Don't process the message
+
     ai_graph = cast(Runnable, cl.user_session.get("ai_graph"))
     configuration = cl.user_session.get("configuration")
 
@@ -300,8 +338,18 @@ async def main(input_message: cl.Message):
     for v in get_unique(response["video_references"]):
         await format_video_reference(v).send()
 
-    for u in get_unique(response["url_references"]):
-        await format_url_reference(u).send()
+    url_reference_tasks = [
+        format_url_reference(u) for u in get_unique(response["url_references"])
+    ]
+    url_reference_messages = await asyncio.gather(*url_reference_tasks)
+    for msg in url_reference_messages:
+        await msg.send()
+
+
+@cl.on_chat_end
+async def end():
+    session_id = cl.context.session.id
+    logging.info(f"Session ended: {session_id}")
 
 
 if __name__ == "__main__":
