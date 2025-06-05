@@ -1,4 +1,5 @@
 import asyncio
+import atexit
 import json
 import glob
 import aiofiles
@@ -24,6 +25,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 from qdrant_client.models import PointStruct
 from pstuts_rag.utils import get_embeddings_api, flatten, batch
+from pathvalidate import sanitize_filename, sanitize_filepath
 
 
 class DatastoreManager:
@@ -56,7 +58,7 @@ class DatastoreManager:
     def __init__(
         self,
         embeddings: Optional[Embeddings] = None,
-        qdrant_client: QdrantClient = QdrantClient(location=":memory:"),
+        qdrant_client: QdrantClient | None = None,
         name: str = str(object=uuid.uuid4()),
         config: Configuration = Configuration(),
     ) -> None:
@@ -76,7 +78,39 @@ class DatastoreManager:
             self.embeddings = embeddings
 
         self.name = name if name else config.eva_workflow_name
+
+        if qdrant_client is None:
+
+            try:
+                if (
+                    config.db_persist
+                    and isinstance(config.db_persist, str)
+                    and len(config.db_persist) > 0
+                ):
+                    qdrant_path = Path(
+                        sanitize_filepath(config.db_persist)
+                    ) / sanitize_filename(config.embedding_model)
+                    logging.info(
+                        "Persisting the datastore to: %s",
+                        str(qdrant_path),
+                    )
+
+                    qdrant_path.mkdir(parents=True, exist_ok=True)
+
+                    qdrant_client = QdrantClient(path=str(qdrant_path))
+            except (OSError, ValueError) as e:
+                logging.error(
+                    "Persistence aborted, exception occurred: %s: %s",
+                    type(e).__name__,
+                    str(e),
+                )
+            finally:
+                if qdrant_client is None:
+                    qdrant_client = QdrantClient(location=":memory:")
+
         self.qdrant_client = qdrant_client
+        atexit.register(qdrant_client.close)
+
         self.loading_complete = asyncio.Event()
         self._completion_callbacks = []
 

@@ -1,6 +1,7 @@
 from pstuts_rag.configuration import Configuration
 import asyncio
 from typing import cast
+import signal
 
 import chainlit as cl
 from dotenv import load_dotenv
@@ -299,5 +300,10 @@ async def main(input_message: cl.Message):
 
 
 if __name__ == "__main__":
-    # This will start the Chainlit app when run directly
+
+    def handle_sigint(signum, frame):
+        print("SIGINT received (Ctrl+C), exiting...")
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, handle_sigint)
     pass

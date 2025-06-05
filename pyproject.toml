@@ -51,6 +51,7 @@ dependencies = [
     "langgraph-cli[inmem]>=0.1.55",
     "langchain-tavily>=0.2.0",
     "beautifulsoup4>=4.13.4",
+    "pathvalidate>=3.2.3",
 ]
 authors = [{ name = "Marko Budisic", email = "mbudisic@gmail.com" }]
 license = "MIT"

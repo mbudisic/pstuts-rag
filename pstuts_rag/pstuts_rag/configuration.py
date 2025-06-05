@@ -70,6 +70,8 @@ class Configuration:
 
     search_permission: str = str(os.environ.get("EVA_SEARCH_PERMISSION", "no"))
 
+    db_persist: str | None = os.environ.get("EVA_DB_PERSIST", None)
+
     thread_id: str = ""
 
     @classmethod
