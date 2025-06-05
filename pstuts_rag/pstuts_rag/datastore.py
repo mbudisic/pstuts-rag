@@ -466,9 +466,7 @@ def load_transcripts_segments(
 
 async def chunk_transcripts(
     json_transcripts: List[Dict[str, Any]],
-    semantic_chunker_embedding_model: Embeddings = OpenAIEmbeddings(
-        model="text-embedding-3-small"
-    ),
+    semantic_chunker_embedding_model: Embeddings,
 ) -> List[Document]:
     """
     Load and process video transcripts into semantically chunked documents.
