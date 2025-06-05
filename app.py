@@ -46,10 +46,13 @@ unique_id = uuid4().hex[0:8]
 @cl.on_chat_start
 async def on_chat_start():
     """
-    Initializes the application when a new chat session starts.
+    Handler for the start of a new chat session in Chainlit.
 
-    Sets up the language model, vector database components, and spawns tasks
-    for database population and graph building.
+    - Initializes the application state for a new user session.
+    - Sets up configuration, unique thread/session IDs, and the vector database (datastore).
+    - Triggers asynchronous population of the datastore from transcript files.
+    - Compiles the AI graph and stores all session objects in Chainlit's user session context.
+    - Notifies the user that the session is active.
     """
 
     global active_session
@@ -69,12 +72,7 @@ async def on_chat_start():
     thread_id = f"chat_{uuid4().hex[:8]}"
     configuration.thread_id = thread_id
 
-    # datastore = await asyncio.to_thread(
-    #     lambda: DatastoreManager(config=configuration).add_completion_callback(
-    #         lambda: cl.run_sync(
-    #             cl.Message(content="Datastore loading completed.").send()
-    #         )
-    #     )
+    # Instantiate the Datastore and register a callback to notify when loading is complete
     datastore = Datastore(config=configuration)
     datastore.add_completion_callback(
         lambda: cl.run_sync(
@@ -83,10 +81,11 @@ async def on_chat_start():
     )
 
     checkpointer = MemorySaver()
-    # Initialize and compile graph synchronously (blocking as intended)
+    # Compile the AI graph synchronously (blocking as intended)
     datastore, graph_builder = initialize(datastore)
     ai_graph = graph_builder.compile(checkpointer=checkpointer)
 
+    # Start async population of the datastore from transcript files
     asyncio.create_task(
         datastore.from_json_globs(configuration.transcript_glob)
     )
@@ -185,6 +184,15 @@ from langchain_core.documents import Document
 
 
 def format_video_reference(doc: Document):
+    """
+    Format a video reference from a LangChain Document into a Chainlit message with a video element.
+
+    Args:
+        doc (Document): The document containing video metadata (title, source, start, stop).
+
+    Returns:
+        cl.Message: Chainlit message with a video preview and timestamp.
+    """
     v = {k: doc.metadata[k] for k in ("title", "source", "start", "stop")}
 
     v["start_min"] = f"{round(v['start'] // 60)}m:{round(v['start'] % 60)}s"
@@ -202,6 +210,15 @@ def format_video_reference(doc: Document):
 
 
 async def format_url_reference(url_ref):
+    """
+    Asynchronously fetch a screenshot preview for a URL using the Microlink API and format it as a Chainlit message.
+
+    Args:
+        url_ref (dict): Dictionary with 'url' and 'title' keys.
+
+    Returns:
+        cl.Message: Chainlit message with a screenshot image (if available) and a clickable link.
+    """
     microlink = "https://api.microlink.io"
     params = {
         "url": url_ref["url"],
@@ -238,11 +255,22 @@ from langchain.callbacks.base import BaseCallbackHandler
 
 
 class ChainlitCallbackHandler(BaseCallbackHandler):
+    """
+    Custom callback handler for Chainlit to visualize the execution of LangChain chains/graphs.
+
+    - Tracks the current step in the graph and displays it in the Chainlit UI.
+    - Handles step start, end, and error events, ensuring the UI is updated accordingly.
+    """
+
     def __init__(self):
         self.current_step = None
         self.step_counter = 0
 
     async def on_chain_start(self, serialized, inputs, **kwargs):
+        """
+        Called when a new chain/graph step starts.
+        Creates a new Chainlit step for visualization if the step is part of the graph.
+        """
         try:
             logging.info(kwargs)
             if (
@@ -259,8 +287,8 @@ class ChainlitCallbackHandler(BaseCallbackHandler):
                 await self.current_step.__aenter__()
 
         except Exception as e:
+            # If step creation fails, still increment counter and create a fallback step
             self.step_counter += 1
-
             print(f"Error in on_chain_start: {e}")
             self.current_step = cl.Step(
                 name=f"Exception step_{self.step_counter}"
@@ -268,6 +296,10 @@ class ChainlitCallbackHandler(BaseCallbackHandler):
             await self.current_step.__aenter__()
 
     async def on_chain_end(self, outputs, **kwargs):
+        """
+        Called when a chain/graph step ends.
+        Closes the Chainlit step and optionally attaches output.
+        """
         try:
             if self.current_step:
                 # Optional: Add output to the step
@@ -286,10 +318,14 @@ class ChainlitCallbackHandler(BaseCallbackHandler):
                     await self.current_step.__aexit__(None, None, None)
                     self.current_step = None
                 except:
+                    # Suppress all exceptions here to avoid cascading errors
                     pass
 
     async def on_chain_error(self, error, **kwargs):
-        """Handle errors and close the step"""
+        """
+        Called when a chain/graph step raises an error.
+        Closes the Chainlit step and attaches the error message.
+        """
         try:
             if self.current_step:
                 self.current_step.output = f"Error: {str(error)}"
@@ -305,18 +341,21 @@ import time
 @cl.on_message
 async def main(input_message: cl.Message):
     """
-    Processes incoming user messages and sends responses.
+    Main message handler for incoming user messages in Chainlit.
 
-    Streams the AI agent's response, processes it to extract text and
-    video references, and sends the content back to the user's chat interface.
+    - Checks if the session is active; if not, notifies the user and aborts.
+    - Retrieves the AI graph and configuration from the session context.
+    - Invokes the AI graph asynchronously with the user's query.
+    - Streams the final answer token-by-token to the user.
+    - Sends any video or URL references as additional messages.
 
     Args:
-        message: User's input message
+        input_message (cl.Message): The incoming user message from the chat UI.
     """
     global active_session
     current_session_id = cl.context.session.id
 
-    # Check if this is the active session
+    # Check if this is the active session; only one session is allowed at a time
     if current_session_id != active_session["id"]:
         await cl.Message(
             content="🔴 **Inactive Session**\n\nThis tab is no longer active. Please close this tab and use the active session.",
@@ -331,7 +370,7 @@ async def main(input_message: cl.Message):
         await cl.Message(content="Error: Configuration not found").send()
         return
 
-    # Convert Configuration to RunnableConfig format
+    # Convert Configuration to RunnableConfig format and attach callback handler for Chainlit visualization
     config = configuration.to_runnable_config()
     config["callbacks"] = [ChainlitCallbackHandler()]
 
@@ -342,14 +381,13 @@ async def main(input_message: cl.Message):
 
     for msg in response["messages"]:
         if isinstance(msg, FinalAnswer):
-
+            # Stream the final answer token-by-token for a typing effect
             final_msg = cl.Message(content="", author=msg.type)
             await final_msg.send()
             tokens = list(msg.content)
             for token in tokens:
                 await final_msg.stream_token(token)
                 time.sleep(0.01)
-
             if final_msg:
                 await final_msg.update()
 
@@ -366,6 +404,10 @@ async def main(input_message: cl.Message):
 
 @cl.on_chat_end
 async def end():
+    """
+    Handler for the end of a chat session in Chainlit.
+    Logs the session end event.
+    """
     session_id = cl.context.session.id
     logging.info(f"Session ended: {session_id}")
 
@@ -373,6 +415,9 @@ async def end():
 if __name__ == "__main__":
 
     def handle_sigint(signum, frame):
+        """
+        Handle SIGINT (Ctrl+C) gracefully by printing a message and exiting.
+        """
         print("SIGINT received (Ctrl+C), exiting...")
         sys.exit(0)
 
