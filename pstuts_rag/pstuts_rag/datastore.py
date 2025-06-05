@@ -60,7 +60,7 @@ class QdrantClientSingleton:
             return cls._instance
 
 
-class DatastoreManager:
+class Datastore:
     """Factory class for creating and managing vector store retrievers.
 
     This class simplifies the process of creating, populating, and managing

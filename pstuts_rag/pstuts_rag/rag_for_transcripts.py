@@ -19,7 +19,7 @@ from langchain_openai import ChatOpenAI
 from langchain_huggingface import ChatHuggingFace
 from langchain_ollama import ChatOllama
 
-from .datastore import DatastoreManager
+from .datastore import Datastore
 from .prompts import RAG_PROMPT_TEMPLATES
 from pstuts_rag.utils import ChatAPISelector
 from pstuts_rag.configuration import Configuration, ModelAPI
@@ -101,7 +101,7 @@ def strip_think_tags(input: str) -> str:
 
 
 def create_transcript_rag_chain(
-    datastore: DatastoreManager,
+    datastore: Datastore,
     config: Union[RunnableConfig, Configuration] = Configuration(),
 ) -> Runnable:
     """Create a Retrieval-Augmented Generation (RAG) chain for video transcript search.

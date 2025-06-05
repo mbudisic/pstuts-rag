@@ -83,7 +83,7 @@ pip install -e ".[dev,web]"        # Core + dev + web server
 
 #### 🏗️ Core Classes and Factories
 - **`Configuration`** (`configuration.py`): Application settings including model names, file paths, and parameters
-- **`DatastoreManager`** (`datastore.py`): Manages Qdrant vector store, document loading, and semantic chunking
+- **`Datastore`** (`datastore.py`): Manages Qdrant vector store, document loading, and semantic chunking
 - **`RAGChainFactory`** (`rag.py`): Creates retrieval-augmented generation chains with reference compilation
 - **`RAGChainInstance`** (`rag.py`): Encapsulates complete RAG instances with embeddings and vector stores
 - **`RAG for Transcripts`** (`rag_for_transcripts.py`): Implements the RAG chain for searching video transcripts, including reference packing and post-processing for AIMessage responses. Used for context-rich, reference-annotated answers from video data. 🎬
@@ -102,7 +102,7 @@ pip install -e ".[dev,web]"        # Core + dev + web server
   - Thread-safe via a lock
   - Every call logs the requested path for debugging 🪵
 
-#### 🏪 DatastoreManager (datastore.py)
+#### 🏪 Datastore (datastore.py)
 - **Collection Creation Logic:**
   - On initialization, always tries to create the Qdrant collection for the vector store.
   - If the collection already exists, catches the `ValueError` and simply fetches the existing collection instead (no crash, no duplicate creation!).
@@ -153,10 +153,10 @@ This feature enables controlled access to external resources while maintaining a
 - **Custom embedding models**: Fine-tuned embeddings for PsTuts domain
 
 #### ⚡ Asynchronous Loading System
-- **`DatastoreManager.loading_complete`**: AsyncIO Event object that's set when data loading completes
-- **`DatastoreManager.is_ready()`**: Convenience method to check if loading is complete
-- **`DatastoreManager.wait_for_loading(timeout)`**: Async method to wait for loading completion with optional timeout
-- **`DatastoreManager.add_completion_callback(callback)`**: Register callbacks (sync or async) to be called when loading completes
+- **`Datastore.loading_complete`**: AsyncIO Event object that's set when data loading completes
+- **`Datastore.is_ready()`**: Convenience method to check if loading is complete
+- **`Datastore.wait_for_loading(timeout)`**: Async method to wait for loading completion with optional timeout
+- **`Datastore.add_completion_callback(callback)`**: Register callbacks (sync or async) to be called when loading completes
 - **Non-blocking startup**: Vector database loading runs in background threads to prevent UI blocking
 - **Background processing**: `asyncio.create_task()` used for concurrent data loading during application startup
 - **Event-driven notifications**: Hook into loading completion for reactive programming patterns

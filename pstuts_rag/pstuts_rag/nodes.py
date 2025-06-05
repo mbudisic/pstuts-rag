@@ -24,7 +24,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from pstuts_rag.utils import get_chat_api, get_title_streaming
 from pstuts_rag.configuration import Configuration
-from pstuts_rag.datastore import DatastoreManager
+from pstuts_rag.datastore import Datastore
 from pstuts_rag.prompts import NODE_PROMPTS
 from pstuts_rag.rag_for_transcripts import create_transcript_rag_chain
 
@@ -244,7 +244,7 @@ async def search_help(
 
 
 async def search_rag(
-    state: TutorialState, config: RunnableConfig, datastore: DatastoreManager
+    state: TutorialState, config: RunnableConfig, datastore: Datastore
 ):
     """Search tutorial transcripts using RAG (Retrieval-Augmented Generation).
 
@@ -475,9 +475,9 @@ def init_state(state: TutorialState, config: RunnableConfig):
 
 
 def initialize(
-    datastore: DatastoreManager | None = None,
+    datastore: Datastore | None = None,
     configuration: Configuration = Configuration(),
-) -> Tuple[DatastoreManager, StateGraph]:
+) -> Tuple[Datastore, StateGraph]:
     """Initialize and configure the LangGraph StateGraph with all nodes and edges.
 
     Creates a complete workflow graph with research, search, and routing nodes.
@@ -491,9 +491,9 @@ def initialize(
         tuple: (DatastoreManager instance, configured StateGraph builder)
     """
     if datastore is None:
-        datastore = DatastoreManager(
-            config=Configuration()
-        ).add_completion_callback(lambda: "Datastore loading completed.")
+        datastore = Datastore(config=Configuration()).add_completion_callback(
+            lambda: "Datastore loading completed."
+        )
 
     graph_builder = StateGraph(TutorialState)
 
@@ -555,9 +555,9 @@ async def graph(config: RunnableConfig = None):
     initialize_datastore: bool = _datastore is None
     if initialize_datastore:
         _datastore = await asyncio.to_thread(
-            lambda: DatastoreManager(
-                config=Configuration()
-            ).add_completion_callback(lambda: "Datastore loading completed.")
+            lambda: Datastore(config=Configuration()).add_completion_callback(
+                lambda: "Datastore loading completed."
+            )
         )
 
     # Initialize and compile graph synchronously (blocking as intended)

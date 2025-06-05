@@ -11,7 +11,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import Runnable
 
-from pstuts_rag.datastore import DatastoreManager
+from pstuts_rag.datastore import Datastore
 from pstuts_rag.nodes import initialize
 
 import nest_asyncio
@@ -54,7 +54,7 @@ async def on_chat_start():
     #             cl.Message(content="Datastore loading completed.").send()
     #         )
     #     )
-    datastore = DatastoreManager(config=configuration)
+    datastore = Datastore(config=configuration)
     datastore.add_completion_callback(
         lambda: cl.run_sync(
             cl.Message(content="Datastore loading completed.").send()

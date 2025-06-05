@@ -30,7 +30,7 @@ from langchain_qdrant import QdrantVectorStore
 
 from .prompts import RAG_PROMPT_TEMPLATES
 
-from .datastore import DatastoreManager
+from .datastore import Datastore
 
 from pstuts_rag.configuration import Configuration
 
@@ -205,7 +205,7 @@ class RAGChainInstance:
     docs: List[Document] = []
     qdrant_client: QdrantClient = None
     vector_store: QdrantVectorStore = None
-    datastore_manager: DatastoreManager
+    datastore_manager: Datastore
     rag_factory: RAGChainFactory
     llm: BaseChatModel
     rag_chain: Runnable | None = None
@@ -244,7 +244,7 @@ class RAGChainInstance:
             Runnable: The assembled RAG chain ready for invocation.
         """
 
-        self.datastore_manager = DatastoreManager(
+        self.datastore_manager = Datastore(
             qdrant_client=self.qdrant_client, name=self.name
         )
         if self.datastore_manager.count_docs() == 0:

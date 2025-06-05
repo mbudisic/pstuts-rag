@@ -13,7 +13,7 @@ from langgraph.graph import StateGraph, START, END
 
 from pstuts_rag.prompts import SUPERVISOR_SYSTEM, TAVILY_SYSTEM
 from pstuts_rag.state import PsTutsTeamState
-from pstuts_rag.datastore import DatastoreManager
+from pstuts_rag.datastore import Datastore
 from pstuts_rag.configuration import Configuration
 
 import asyncio
@@ -254,7 +254,7 @@ def initialize_datastore(callback: Optional[Callable] = None):
     Returns:
         DatastoreManager: Configured datastore instance with loading in progress
     """
-    datastore = DatastoreManager()
+    datastore = Datastore()
     if callback:
         datastore.add_completion_callback(callback)
     asyncio.create_task(
@@ -265,7 +265,7 @@ def initialize_datastore(callback: Optional[Callable] = None):
 
 
 async def build_the_graph(
-    datastore: DatastoreManager, config: Configuration = Configuration()
+    datastore: Datastore, config: Configuration = Configuration()
 ):
     """
     Builds the agent graph for routing user queries.
