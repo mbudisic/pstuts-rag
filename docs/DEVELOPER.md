@@ -165,6 +165,31 @@ This feature enables controlled access to external resources while maintaining a
 - **`evaluator_utils.py`**: RAG evaluation utilities using RAGAS framework
 - **Notebook-based evaluation**: `evaluate_rag.ipynb` for systematic testing
 
+### ⚙️ Configuration Reference
+
+The `Configuration` class (in `pstuts_rag/configuration.py`) is powered by Pydantic and supports environment variable overrides for all fields. Below is a reference for all configuration options:
+
+| Field | Env Var | Type | Default | Description |
+|-------|---------|------|---------|-------------|
+| `eva_workflow_name` | `EVA_WORKFLOW_NAME` | `str` | `EVA_workflow` | 🏷️ Name of the EVA workflow |
+| `eva_log_level` | `EVA_LOG_LEVEL` | `str` | `INFO` | 🪵 Logging level for EVA |
+| `transcript_glob` | `TRANSCRIPT_GLOB` | `str` | `data/test.json` | 📄 Glob pattern for transcript JSON files (supports `:` for multiple) |
+| `embedding_model` | `EMBEDDING_MODEL` | `str` | `mbudisic/snowflake-arctic-embed-s-ft-pstuts` | 🧊 Embedding model name (default: custom fine-tuned snowflake) |
+| `eva_strip_think` | `EVA_STRIP_THINK` | `bool` | `False` | 💭 If set (present in env), strips 'think' steps from EVA output |
+| `embedding_api` | `EMBEDDING_API` | `ModelAPI` | `HUGGINGFACE` | 🔌 API provider for embeddings (`OPENAI`, `HUGGINGFACE`, `OLLAMA`) |
+| `llm_api` | `LLM_API` | `ModelAPI` | `OLLAMA` | 🤖 API provider for LLM (`OPENAI`, `HUGGINGFACE`, `OLLAMA`) |
+| `max_research_loops` | `MAX_RESEARCH_LOOPS` | `int` | `3` | 🔁 Maximum number of research loops to perform |
+| `llm_tool_model` | `LLM_TOOL_MODEL` | `str` | `smollm2:1.7b-instruct-q2_K` | 🛠️ LLM model for tool calling |
+| `n_context_docs` | `N_CONTEXT_DOCS` | `int` | `2` | 📚 Number of context documents to retrieve for RAG |
+| `search_permission` | `EVA_SEARCH_PERMISSION` | `str` | `no` | 🌐 Permission for search (`yes`, `no`, `ask`) |
+| `db_persist` | `EVA_DB_PERSIST` | `str or None` | `None` | 💾 Path or flag for DB persistence |
+| `eva_reinitialize` | `EVA_REINITIALIZE` | `bool` | `False` | 🔄 If true, reinitializes EVA DB |
+| `thread_id` | `THREAD_ID` | `str` | `""` | 🧵 Thread ID for the current session |
+
+- All fields can be set via environment variables (see [Pydantic BaseSettings docs](https://docs.pydantic.dev/latest/usage/settings/)).
+- Types are enforced at runtime. Defaults are shown above.
+- For advanced usage, see the `Configuration` class in `pstuts_rag/configuration.py`.
+
 ## 🎨 UI Customization & Theming
 
 ### Sepia Theme Implementation 🖼️

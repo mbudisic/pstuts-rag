@@ -1,8 +1,9 @@
 import os
 import logging
-from dataclasses import dataclass, fields
 from typing import Any, Optional
 from enum import Enum
+from pydantic_settings import BaseSettings
+from pydantic import Field
 
 from langchain_core.runnables import RunnableConfig
 
@@ -21,60 +22,94 @@ class ModelAPI(Enum):
     OLLAMA = "OLLAMA"
 
 
-@dataclass(kw_only=True)
-class Configuration:
+class Configuration(BaseSettings):
     """
-    Configuration parameters for the application.
-
-    Attributes:
-        transcript_glob: Glob pattern for transcript JSON files (supports multiple files separated by ':')
-        embedding_model: Name of the embedding model to use (default: custom fine-tuned snowflake model)
-        embedding_api: API provider for embeddings (OPENAI or HUGGINGFACE)
-        max_research_loops: Maximum number of research loops to perform
-        llm_tool_model: Name of the LLM model to use for tool calling
-        n_context_docs: Number of context documents to retrieve for RAG
+    Configuration parameters for the application. All fields can be set via environment variables.
     """
 
-    eva_workflow_name: str = str(
-        os.environ.get("EVA_WORKFLOW_NAME", "EVA_workflow")
+    eva_workflow_name: str = Field(
+        default_factory=lambda: os.environ.get(
+            "EVA_WORKFLOW_NAME", "EVA_workflow"
+        ),
+        description="Name of the EVA workflow. Set via EVA_WORKFLOW_NAME.",
     )
-
-    eva_log_level: str = str(os.environ.get("EVA_LOG_LEVEL", "INFO")).upper()
-
-    transcript_glob: str = str(
-        os.environ.get("TRANSCRIPT_GLOB", "data/test.json")
+    eva_log_level: str = Field(
+        default_factory=lambda: os.environ.get(
+            "EVA_LOG_LEVEL", "INFO"
+        ).upper(),
+        description="Logging level for EVA. Set via EVA_LOG_LEVEL.",
     )
-
-    embedding_model: str = str(
-        os.environ.get(
+    transcript_glob: str = Field(
+        default_factory=lambda: os.environ.get(
+            "TRANSCRIPT_GLOB", "data/test.json"
+        ),
+        description="Glob pattern for transcript JSON files (supports multiple files separated by ':'). Set via TRANSCRIPT_GLOB.",
+    )
+    embedding_model: str = Field(
+        default_factory=lambda: os.environ.get(
             "EMBEDDING_MODEL", "mbudisic/snowflake-arctic-embed-s-ft-pstuts"
-        )
+        ),
+        description="Name of the embedding model to use (default: custom fine-tuned snowflake model). Set via EMBEDDING_MODEL.",
     )
 
-    eva_strip_think: bool = "EVA_STRIP_THINK" in os.environ
-
-    embedding_api: ModelAPI = ModelAPI(
-        os.environ.get("EMBEDDING_API", ModelAPI.HUGGINGFACE.value)
+    embedding_api: ModelAPI = Field(
+        default_factory=lambda: ModelAPI(
+            os.environ.get("EMBEDDING_API", ModelAPI.HUGGINGFACE.value)
+        ),
+        description="API provider for embeddings (OPENAI, HUGGINGFACE, or OLLAMA). Set via EMBEDDING_API.",
+    )
+    llm_api: ModelAPI = Field(
+        default_factory=lambda: ModelAPI(
+            os.environ.get("LLM_API", ModelAPI.OLLAMA.value)
+        ),
+        description="API provider for LLM (OPENAI, HUGGINGFACE, or OLLAMA). Set via LLM_API.",
+    )
+    max_research_loops: int = Field(
+        default_factory=lambda: int(os.environ.get("MAX_RESEARCH_LOOPS", "3")),
+        description="Maximum number of research loops to perform. Set via MAX_RESEARCH_LOOPS.",
+    )
+    llm_tool_model: str = Field(
+        default_factory=lambda: os.environ.get(
+            "LLM_TOOL_MODEL", "smollm2:1.7b-instruct-q2_K"
+        ),
+        description="Name of the LLM model to use for tool calling. Set via LLM_TOOL_MODEL.",
+    )
+    n_context_docs: int = Field(
+        default_factory=lambda: int(os.environ.get("N_CONTEXT_DOCS", "2")),
+        description="Number of context documents to retrieve for RAG. Set via N_CONTEXT_DOCS.",
+    )
+    search_permission: str = Field(
+        default_factory=lambda: os.environ.get("EVA_SEARCH_PERMISSION", "no"),
+        description="Permission for search (yes/no). Set via EVA_SEARCH_PERMISSION.",
+    )
+    db_persist: Optional[str] = Field(
+        default_factory=lambda: os.environ.get("EVA_DB_PERSIST", None),
+        description="Path or flag for DB persistence. Set via EVA_DB_PERSIST.",
+    )
+    eva_reinitialize: bool = Field(
+        default_factory=lambda: os.environ.get(
+            "EVA_REINITIALIZE", "False"
+        ).lower()
+        in ("true", "1", "yes"),
+        description="If true, reinitializes EVA DB. Set via EVA_REINITIALIZE.",
+    )
+    eva_strip_think: bool = Field(
+        default_factory=lambda: os.environ.get(
+            "EVA_STRIP_THINK", "True"
+        ).lower()
+        in ("true", "1", "yes"),
+        description="If true (default) strips thinking tags from LLM responses. Set via EVA_STRIP_THINK.",
     )
 
-    llm_api: ModelAPI = ModelAPI(
-        os.environ.get("LLM_API", ModelAPI.OLLAMA.value)
+    thread_id: str = Field(
+        default="",
+        description="Thread ID for the current session. Set via THREAD_ID.",
     )
 
-    max_research_loops: int = int(os.environ.get("MAX_RESEARCH_LOOPS", "3"))
-
-    llm_tool_model: str = str(
-        os.environ.get("LLM_TOOL_MODEL", "smollm2:1.7b-instruct-q2_K")
-    )
-    n_context_docs: int = int(os.environ.get("N_CONTEXT_DOCS", "2"))
-
-    search_permission: str = str(os.environ.get("EVA_SEARCH_PERMISSION", "no"))
-
-    db_persist: str | None = os.environ.get("EVA_DB_PERSIST", None)
-
-    eva_reinitialize: bool = bool(os.environ.get("EVA_REINITIALIZE", "False"))
-
-    thread_id: str = ""
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        extra = "ignore"  # Allow extra env vars in .env/environment
 
     @classmethod
     def from_runnable_config(
@@ -96,16 +131,14 @@ class Configuration:
             if config and "configurable" in config
             else {}
         )
-        # Map each dataclass field to environment variables or configurable values
+        # Map each field to environment variables or configurable values
         # Priority: environment variables > configurable dict values > field defaults
         values: dict[str, Any] = {
-            f.name: os.environ.get(f.name.upper(), configurable.get(f.name))
-            for f in fields(cls)
-            if f.init
+            name: os.environ.get(name.upper(), configurable.get(name))
+            for name in cls.__fields__
         }
         logging.info("Configuration:\n%s", values)
-
-        return cls(**{k: v for k, v in values.items() if v})
+        return cls(**{k: v for k, v in values.items() if v is not None})
 
     def print(self, print_like_function=logging.info) -> None:
         """Print all configuration parameters using the provided logging function.
@@ -117,10 +150,9 @@ class Configuration:
             None
         """
         print_like_function("Configuration parameters:")
-        for field in fields(self):
-            if field.init:
-                value = getattr(self, field.name)
-                print_like_function("  %s: %s", field.name, value)
+        for name, field in self.__fields__.items():
+            value = getattr(self, name)
+            print_like_function("  %s: %s", name, value)
 
     def to_runnable_config(self) -> RunnableConfig:
         """Convert Configuration instance to RunnableConfig format.
@@ -129,16 +161,10 @@ class Configuration:
             RunnableConfig: Properly formatted configuration for LangGraph
         """
         configurable_dict = {}
-
-        # Add all non-empty configuration fields to configurable
-        for field in fields(self):
-            if field.init:
-                value = getattr(self, field.name)
-                if value:  # Only include non-empty values
-                    configurable_dict[field.name] = value
-
-        # Ensure thread_id is included if set
+        for name in self.__fields__:
+            value = getattr(self, name)
+            if value:
+                configurable_dict[name] = value
         if self.thread_id:
             configurable_dict["thread_id"] = self.thread_id
-
         return RunnableConfig(configurable=configurable_dict)

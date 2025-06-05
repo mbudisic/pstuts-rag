@@ -61,3 +61,26 @@ chainlit run app.py
 - Web search integration via Tavily
 - Semantic chunking for better context retrieval
 - Interactive chat interface through Chainlit
+
+## ⚙️ Configuration Options
+
+You can customize the behavior of PsTuts RAG using environment variables. Set these in your shell, `.env` file, or deployment environment. Here are the available options:
+
+| Env Var | Description |
+|---------|-------------|
+| `EVA_WORKFLOW_NAME` | 🏷️ Name of the EVA workflow. Default: `EVA_workflow` |
+| `EVA_LOG_LEVEL` | 🪵 Logging level for EVA. Default: `INFO` |
+| `TRANSCRIPT_GLOB` | 📄 Glob pattern for transcript JSON files (supports multiple files separated by `:`). Default: `data/test.json` |
+| `EMBEDDING_MODEL` | 🧊 Name of the embedding model to use (default: custom fine-tuned snowflake model). Default: `mbudisic/snowflake-arctic-embed-s-ft-pstuts` |
+| `EVA_STRIP_THINK` | 💭 If set (present in env), strips 'think' steps from EVA output. |
+| `EMBEDDING_API` | 🔌 API provider for embeddings (`OPENAI`, `HUGGINGFACE`, or `OLLAMA`). Default: `HUGGINGFACE` |
+| `LLM_API` | 🤖 API provider for LLM (`OPENAI`, `HUGGINGFACE`, or `OLLAMA`). Default: `OLLAMA` |
+| `MAX_RESEARCH_LOOPS` | 🔁 Maximum number of research loops to perform. Default: `3` |
+| `LLM_TOOL_MODEL` | 🛠️ Name of the LLM model to use for tool calling. Default: `smollm2:1.7b-instruct-q2_K` |
+| `N_CONTEXT_DOCS` | 📚 Number of context documents to retrieve for RAG. Default: `2` |
+| `EVA_SEARCH_PERMISSION` | 🌐 Permission for search (`yes`, `no`, or `ask`). Default: `no` |
+| `EVA_DB_PERSIST` | 💾 Path or flag for DB persistence. Default: unset |
+| `EVA_REINITIALIZE` | 🔄 If true, reinitializes EVA DB. Default: `False` |
+| `THREAD_ID` | 🧵 Thread ID for the current session. Default: unset |
+
+Set these variables to control model selection, logging, search permissions, and more. For advanced usage, see the developer documentation.
