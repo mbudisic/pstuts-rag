@@ -89,6 +89,31 @@ pip install -e ".[dev,web]"        # Core + dev + web server
 - **`RAG for Transcripts`** (`rag_for_transcripts.py`): Implements the RAG chain for searching video transcripts, including reference packing and post-processing for AIMessage responses. Used for context-rich, reference-annotated answers from video data. 🎬
 - **`Graph Assembly`** (`graph.py`): Handles agent node creation, LangGraph assembly, and integration of multi-agent workflows. Provides utilities for building, initializing, and running the agentic graph. 🕸️
 
+#### 🗄️ QdrantClientSingleton (datastore.py)
+- **Purpose:** Ensures only one instance of QdrantClient exists per process, preventing accidental concurrent access to embedded Qdrant. Thread-safe and logs every access!
+- **Usage:**
+  ```python
+  from pstuts_rag.datastore import QdrantClientSingleton
+  client = QdrantClientSingleton.get_client(path="/path/to/db")  # or path=None for in-memory
+  ```
+- **Behavior:**
+  - First call determines the storage location (persistent or in-memory)
+  - All subsequent calls return the same client, regardless of path
+  - Thread-safe via a lock
+  - Every call logs the requested path for debugging 🪵
+
+#### 🏪 DatastoreManager (datastore.py)
+- **Collection Creation Logic:**
+  - On initialization, always tries to create the Qdrant collection for the vector store.
+  - If the collection already exists, catches the `ValueError` and simply fetches the existing collection instead (no crash, no duplicate creation!).
+  - This is the recommended robust pattern for Qdrant local mode. 🦺
+  - Example log output:
+    ```
+    Collection EVA_AI_transcripts created.
+    # or
+    Collection EVA_AI_transcripts already exists.
+    ```
+
 #### 🕸️ Multi-Agent System
 - **`PsTutsTeamState`** (`state.py`): TypedDict managing multi-agent conversation state
 - **Agent creation functions** (`graph.py`): Factory functions for different agent types:

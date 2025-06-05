@@ -48,11 +48,16 @@ async def on_chat_start():
     thread_id = f"chat_{uuid4().hex[:8]}"
     configuration.thread_id = thread_id
 
-    datastore = await asyncio.to_thread(
-        lambda: DatastoreManager(config=configuration).add_completion_callback(
-            lambda: cl.run_sync(
-                cl.Message(content="Datastore loading completed.").send()
-            )
+    # datastore = await asyncio.to_thread(
+    #     lambda: DatastoreManager(config=configuration).add_completion_callback(
+    #         lambda: cl.run_sync(
+    #             cl.Message(content="Datastore loading completed.").send()
+    #         )
+    #     )
+    datastore = DatastoreManager(config=configuration)
+    datastore.add_completion_callback(
+        lambda: cl.run_sync(
+            cl.Message(content="Datastore loading completed.").send()
         )
     )
 

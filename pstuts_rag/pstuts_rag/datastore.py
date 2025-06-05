@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Dict, Iterator, Any, Callable, Optional, Self
 import uuid
 import logging
+import threading
 
 import chainlit as cl
 from langchain_core.document_loaders import BaseLoader
@@ -28,6 +29,37 @@ from pstuts_rag.utils import get_embeddings_api, flatten, batch
 from pathvalidate import sanitize_filename, sanitize_filepath
 
 
+class QdrantClientSingleton:
+    """
+    Thread-safe singleton for QdrantClient. Ignores path changes after first initialization.
+    Logs every invocation of get_client.
+    """
+
+    _instance = None
+    _lock = threading.Lock()
+    _config = None
+
+    @classmethod
+    def get_client(cls, path=None):
+        import logging
+
+        logging.info(
+            f"QdrantClientSingleton.get_client called with path={path!r}"
+        )
+        from qdrant_client import QdrantClient
+
+        with cls._lock:
+            if cls._instance is None:
+                if path is None:
+                    cls._instance = QdrantClient(location=":memory:")
+                    cls._config = ":memory:"
+                else:
+                    cls._instance = QdrantClient(path=path)
+                    cls._config = path
+            # Ignore any subsequent path changes, always return the first-initialized client
+            return cls._instance
+
+
 class DatastoreManager:
     """Factory class for creating and managing vector store retrievers.
 
@@ -47,6 +79,7 @@ class DatastoreManager:
     embeddings: Embeddings
     docs: List[Document]
     qdrant_client: QdrantClient
+    collection_name: str
     name: str
     vector_store: QdrantVectorStore
     dimensions: int
@@ -59,7 +92,7 @@ class DatastoreManager:
         self,
         embeddings: Optional[Embeddings] = None,
         qdrant_client: QdrantClient | None = None,
-        name: str = str(object=uuid.uuid4()),
+        name: str = "EVA_AI",
         config: Configuration = Configuration(),
     ) -> None:
         """Initialize the RetrieverFactory.
@@ -71,7 +104,6 @@ class DatastoreManager:
         """
 
         if embeddings is None:
-
             cls = get_embeddings_api(config.embedding_api)
             self.embeddings = cls(model=config.embedding_model)
         else:
@@ -80,33 +112,22 @@ class DatastoreManager:
         self.name = name if name else config.eva_workflow_name
 
         if qdrant_client is None:
-
-            try:
-                if (
-                    config.db_persist
-                    and isinstance(config.db_persist, str)
-                    and len(config.db_persist) > 0
-                ):
-                    qdrant_path = Path(
-                        sanitize_filepath(config.db_persist)
-                    ) / sanitize_filename(config.embedding_model)
-                    logging.info(
-                        "Persisting the datastore to: %s",
-                        str(qdrant_path),
-                    )
-
-                    qdrant_path.mkdir(parents=True, exist_ok=True)
-
-                    qdrant_client = QdrantClient(path=str(qdrant_path))
-            except (OSError, ValueError) as e:
-                logging.error(
-                    "Persistence aborted, exception occurred: %s: %s",
-                    type(e).__name__,
-                    str(e),
+            # Use the singleton for QdrantClient
+            path = None
+            if (
+                config.db_persist
+                and isinstance(config.db_persist, str)
+                and len(config.db_persist) > 0
+            ):
+                qdrant_path = Path(
+                    sanitize_filepath(config.db_persist)
+                ) / sanitize_filename(config.embedding_model)
+                logging.info(
+                    "Persisting the datastore to: %s", str(qdrant_path)
                 )
-            finally:
-                if qdrant_client is None:
-                    qdrant_client = QdrantClient(location=":memory:")
+                qdrant_path.mkdir(parents=True, exist_ok=True)
+                path = str(qdrant_path)
+            qdrant_client = QdrantClientSingleton.get_client(path=path)
 
         self.qdrant_client = qdrant_client
         atexit.register(qdrant_client.close)
@@ -116,18 +137,24 @@ class DatastoreManager:
 
         # determine embedding dimension
         self.dimensions = len(self.embeddings.embed_query("test"))
-
-        self.qdrant_client.recreate_collection(
-            collection_name=self.name,
-            vectors_config=VectorParams(
-                size=self.dimensions, distance=Distance.COSINE
-            ),
-        )
+        self.collection_name = self.name + "_transcripts"
+        # Try to create the collection, fall back to get_collection if it already exists
+        try:
+            self.qdrant_client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=VectorParams(
+                    size=self.dimensions, distance=Distance.COSINE
+                ),
+            )
+            logging.info(f"Collection {self.collection_name} created.")
+        except ValueError:
+            self.qdrant_client.get_collection(self.collection_name)
+            logging.info(f"Collection {self.collection_name} already exists.")
 
         # wrapper around the client
         self.vector_store = QdrantVectorStore(
             client=self.qdrant_client,
-            collection_name=self.name,
+            collection_name=self.collection_name,
             embedding=self.embeddings,
         )
 
@@ -219,10 +246,13 @@ class DatastoreManager:
         ]
 
         # upload qdrant payload
-        self.qdrant_client.upload_points(
-            collection_name=self.name,
-            points=points,
-        )
+        if self.count_docs() == len(points):
+            logging.info("Qdrant database populated. Skipping upload")
+        else:
+            self.qdrant_client.upload_points(
+                collection_name=self.collection_name,
+                points=points,
+            )
 
         return len(points)
 
@@ -238,7 +268,9 @@ class DatastoreManager:
             This method is safe to call even if the collection doesn't exist
         """
         try:
-            count = self.qdrant_client.get_collection(self.name).points_count
+            count = self.qdrant_client.get_collection(
+                self.collection_name
+            ).points_count
             return count if count else 0
         except ValueError:
             return 0
