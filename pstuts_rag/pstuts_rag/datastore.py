@@ -85,8 +85,7 @@ class Datastore:
     dimensions: int
     loading_complete: asyncio.Event
     _completion_callbacks: List[Callable]
-
-    config: Optional[Configuration]
+    config: Configuration
 
     def __init__(
         self,
@@ -102,7 +101,7 @@ class Datastore:
             qdrant_client: Qdrant client for vector database operations
             name: Unique identifier for this retriever instance
         """
-
+        self.config = config
         if embeddings is None:
             cls = get_embeddings_api(config.embedding_api)
             self.embeddings = cls(model=config.embedding_model)
@@ -119,9 +118,10 @@ class Datastore:
                 and isinstance(config.db_persist, str)
                 and len(config.db_persist) > 0
             ):
-                qdrant_path = Path(
-                    sanitize_filepath(config.db_persist)
-                ) / sanitize_filename(config.embedding_model)
+                qdrant_path = (
+                    Path(sanitize_filepath(config.db_persist))
+                    / f"{sanitize_filename(config.embedding_model)}_{sanitize_filename(config.transcript_glob)}"
+                )
                 logging.info(
                     "Persisting the datastore to: %s", str(qdrant_path)
                 )
@@ -169,9 +169,16 @@ class Datastore:
             - loading JSON transcripts
             - semantic chunking with timestamp preservation
             -
-
-
         """
+
+        doc_count = self.count_docs()
+        if not (self.config.eva_reinitialize) and doc_count > 0:
+            logging.warning(
+                "Skipping initialization. Database holds %d documents.",
+                doc_count,
+            )
+            return doc_count
+
         logging.debug("Starting to load files.")
         files = globs_to_paths(globs)
 

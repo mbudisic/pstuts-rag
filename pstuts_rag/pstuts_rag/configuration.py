@@ -72,6 +72,8 @@ class Configuration:
 
     db_persist: str | None = os.environ.get("EVA_DB_PERSIST", None)
 
+    eva_reinitialize: bool = bool(os.environ.get("EVA_REINITIALIZE", "False"))
+
     thread_id: str = ""
 
     @classmethod
