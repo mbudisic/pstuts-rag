@@ -52,7 +52,7 @@ def post_process_response(
     ]
     references = str(json.dumps(reference_dicts, indent=2))
 
-    text_w_references = (
+    answer_text = (
         strip_think_tags(str(answer.content))
         if configurable.eva_strip_think
         else answer.content
@@ -63,13 +63,18 @@ def post_process_response(
     #         [str(text_w_references), "**REFERENCES**", references]
     #     )
 
+    if "I don't know." in answer_text:
+        attachments = []
+    else:
+        attachments = input["context"]
+
     # Create new message with references and preserve original context metadata
     output: AIMessage = answer.model_copy(
         update={
-            "content": text_w_references,
+            "content": answer_text,
             "additional_kwargs": {
                 **answer.additional_kwargs,
-                "context": input["context"],
+                "context": attachments,
                 "question": input["question"],
             },
         }
