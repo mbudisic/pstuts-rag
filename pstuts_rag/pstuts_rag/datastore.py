@@ -86,6 +86,7 @@ class Datastore:
     loading_complete: asyncio.Event
     _completion_callbacks: List[Callable]
     config: Configuration
+    reload: bool = True
 
     def __init__(
         self,
@@ -147,9 +148,11 @@ class Datastore:
                 ),
             )
             logging.info(f"Collection {self.collection_name} created.")
+            self.reload = True
         except ValueError:
             self.qdrant_client.get_collection(self.collection_name)
             logging.info(f"Collection {self.collection_name} already exists.")
+            self.reload = not (self.config.eva_reinitialize)
 
         # wrapper around the client
         self.vector_store = QdrantVectorStore(
@@ -172,11 +175,11 @@ class Datastore:
         """
 
         doc_count = self.count_docs()
-        if not (self.config.eva_reinitialize) and doc_count > 0:
-            logging.warning(
-                "Skipping initialization. Database holds %d documents.",
-                doc_count,
-            )
+        if not (self.reload):
+            self.loading_complete.set()
+            msg = f"Skipping initialization. Database holds {doc_count} documents."
+            await cl.Message(content=msg).send()
+            logging.warning(msg)
             return doc_count
 
         logging.debug("Starting to load files.")
