@@ -13,7 +13,7 @@ from langchain_core.messages import HumanMessage
 from langchain_core.runnables import Runnable
 
 from pstuts_rag.datastore import Datastore
-from pstuts_rag.nodes import initialize
+from pstuts_rag.nodes import FinalAnswer, initialize
 
 import nest_asyncio
 from uuid import uuid4
@@ -333,7 +333,8 @@ async def main(input_message: cl.Message):
     response = await ai_graph.ainvoke({"query": input_message.content}, config)
 
     for msg in response["messages"]:
-        await cl.Message(content=msg.content, author=msg.type).send()
+        if isinstance(msg, FinalAnswer):
+            await cl.Message(content=msg.content, author=msg.type).send()
 
     for v in get_unique(response["video_references"]):
         await format_video_reference(v).send()
