@@ -152,7 +152,7 @@ class Datastore:
         except ValueError:
             self.qdrant_client.get_collection(self.collection_name)
             logging.info(f"Collection {self.collection_name} already exists.")
-            self.reload = not (self.config.eva_reinitialize)
+            self.reload = self.config.eva_reinitialize
 
         # wrapper around the client
         self.vector_store = QdrantVectorStore(

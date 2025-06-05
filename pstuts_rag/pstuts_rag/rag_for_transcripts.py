@@ -107,7 +107,7 @@ def strip_think_tags(input: str) -> str:
 
 def create_transcript_rag_chain(
     datastore: Datastore,
-    config: Union[RunnableConfig, Configuration] = Configuration(),
+    config: Configuration = Configuration(),
 ) -> Runnable:
     """Create a Retrieval-Augmented Generation (RAG) chain for video transcript search.
 
@@ -119,19 +119,15 @@ def create_transcript_rag_chain(
 
     Args:
         datastore: The DatastoreManager containing video transcript embeddings
-        config: Configuration object or RunnableConfig with model and retrieval settings
+        config: Configuration object with model and retrieval settings
 
     Returns:
         Runnable: A LangChain runnable that processes questions and returns
                  answers with embedded references to source video segments
     """
 
-    # Handle both Configuration objects and RunnableConfig dictionaries
-    configurable = (
-        config
-        if isinstance(config, Configuration)
-        else Configuration.from_runnable_config(config)
-    )
+    # Use the Configuration object directly
+    configurable = config
 
     # Select the appropriate chat model class based on configuration
     cls = ChatAPISelector.get(configurable.llm_api, ChatOpenAI)

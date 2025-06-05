@@ -151,9 +151,7 @@ def research(state: TutorialState, config: RunnableConfig):
     }
 
 
-async def search_help(
-    state: TutorialState, config: RunnableConfig
-) -> Command[Literal["search_help", "route_is_complete"]]:
+async def search_help(state: TutorialState, config: RunnableConfig):
     """Search Adobe Help documentation for relevant information.
 
     Args:
@@ -164,10 +162,15 @@ async def search_help(
         dict: Updated state with search results message and URL references
     """
 
-    configurable = Configuration.from_runnable_config(config)
+    configurable = await asyncio.to_thread(
+        Configuration.from_runnable_config, config
+    )
+    logging.info("search_help: loaded config")
     cls = get_chat_api(configurable.llm_api)
     llm = cls(model=configurable.llm_tool_model, temperature=0)
     prompt = NODE_PROMPTS["search_summary"]
+
+    logging.info("search_help: configured llm")
 
     adobe_help_search = TavilySearchResults(
         max_results=2,
@@ -177,10 +180,13 @@ async def search_help(
         include_images=True,
         response_format="content_and_artifact",  # Always returns artifacts
     )
+    logging.info("search_help: configured tavily")
+
     query = state["search_query"][-1]
 
     decision = state["search_permission"]
     if decision == YesNoAsk.ASK:
+        logging.info("search_help: asking permission")
 
         response = interrupt(
             (
@@ -191,9 +197,7 @@ async def search_help(
 
         logging.info(f"Permission response '{response}'")
         decision = YesNoAsk.YES if "yes" in response.strip() else YesNoAsk.NO
-        return Command(
-            update={"search_permission": decision}, goto=search_help.__name__
-        )
+        return {"search_permission": decision}
 
     response = {
         "messages": [],
@@ -207,18 +211,23 @@ async def search_help(
         longform = f"Query '{query}' is permitted."
     else:
         longform = f"Query '{query}' is NOT permitted."
+    logging.info("search_help: %s", longform)
 
     response["messages"].append({"role": "human", "content": longform})
 
     if decision == YesNoAsk.YES:
+        logging.info("search_help: searching")
 
         results = await adobe_help_search.ainvoke(query)
+
+        logging.info("search_help: results")
 
         urls = list(r["url"] for r in results)
         tool = TavilyExtract(
             extract_depth="advanced",
             include_images=False,
         )
+        logging.info("search_help: extract text")
 
         results = await tool.ainvoke({"urls": urls})
 
@@ -235,12 +244,14 @@ async def search_help(
             query=query,
             text="\n***\n".join(all_text),
         )
+        logging.info("search_help: text extracted. summarizing.")
 
         url_summary = await llm.ainvoke([HumanMessage(content=prompt)])
         response["messages"].append(url_summary)
         response["url_references"].extend(results["results"])
+        logging.info("search_help: summary complete.")
 
-    return Command(update=response, goto=route_is_complete.__name__)
+    return response
 
 
 async def search_rag(
@@ -256,7 +267,10 @@ async def search_rag(
         dict: Updated state with RAG response and video references
     """
 
-    chain = create_transcript_rag_chain(datastore, config)
+    configurable = await asyncio.to_thread(
+        Configuration.from_runnable_config, config
+    )
+    chain = create_transcript_rag_chain(datastore, configurable)
     query = state["search_query"][-1]
 
     response = await chain.ainvoke({"question": query})
@@ -519,7 +533,7 @@ def initialize(
     graph_builder.add_edge(init_state.__name__, route_is_relevant.__name__)
     graph_builder.add_edge(research.__name__, search_help.__name__)
     graph_builder.add_edge(research.__name__, search_rag.__name__)
-    # graph_builder.add_edge(search_help.__name__, route_is_complete.__name__)
+    graph_builder.add_edge(search_help.__name__, route_is_complete.__name__)
     graph_builder.add_edge(search_rag.__name__, route_is_complete.__name__)
 
     graph_builder.add_edge(write_answer.__name__, END)
@@ -567,8 +581,13 @@ async def graph(config: RunnableConfig = None):
 
     # Start datastore population as background task (non-blocking)
     if initialize_datastore:
-        asyncio.create_task(
-            _datastore.from_json_globs(Configuration().transcript_glob)
-        )
+
+        async def load_datastore():
+            configurable = await asyncio.to_thread(Configuration)
+            await asyncio.to_thread(
+                _datastore.from_json_globs, configurable.transcript_glob
+            )
+
+        asyncio.create_task(load_datastore())
 
     return _compiled_graph
