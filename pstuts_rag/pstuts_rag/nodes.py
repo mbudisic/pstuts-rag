@@ -65,7 +65,7 @@ class YesNoAsk(Enum):
 class TutorialState(MessagesState):
     """State management for tutorial team workflow orchestration."""
 
-    # next: str
+    next: str  # Routing variable for next node
     query: str
     video_references: Annotated[list[Document], operator.add]
     url_references: Annotated[list[Dict], operator.add]
@@ -196,8 +196,24 @@ async def search_help(state: TutorialState, config: RunnableConfig):
         )
 
         logging.info(f"Permission response '{response}'")
-        decision = YesNoAsk.YES if "yes" in response.strip() else YesNoAsk.NO
-        return {"search_permission": decision}
+        decision = (
+            YesNoAsk.YES
+            if any(
+                affirmative in response.strip().lower()
+                for affirmative in [
+                    "yes",
+                    "true",
+                    "ok",
+                    "okay",
+                    "1",
+                    "y",
+                    "sure",
+                    "fine",
+                    "alright",
+                ]
+            )
+            else YesNoAsk.NO
+        )
 
     response = {
         "messages": [],
@@ -309,7 +325,7 @@ class URLReference(BaseModel):
 def route_is_relevant(
     state: TutorialState,
     config: RunnableConfig,
-) -> Command[Literal["research", "write_answer"]]:
+):
     """Route based on whether the query is relevant to Photoshop tutorials.
 
     Args:
@@ -317,10 +333,8 @@ def route_is_relevant(
         config: RunnableConfig for accessing configuration parameters
 
     Returns:
-        Command: Navigation command to either 'research' or 'write_answer'
+        dict: State update with 'next' set to the next node name
     """
-
-    # retrieve the LLM
     configurable = Configuration.from_runnable_config(config)
     cls = get_chat_api(configurable.llm_api)
     logging.info("LLM SELECTED: %s", cls)
@@ -340,19 +354,18 @@ def route_is_relevant(
     else:
         query = state["query"]
 
-    # format the prompt
     prompt = NODE_PROMPTS["relevance"].format(query=query)
-
     relevance = llm.invoke([HumanMessage(content=prompt)])
-    where = "research" if relevance.decision == "yes" else "write_answer"
+    next_node = "research" if relevance.decision == "yes" else "write_answer"
     answer = (
         f"Query is {'not' if relevance.decision == 'no' else ''} "
         "relevant to Photoshop."
     )
-    return Command(
-        update={"messages": [AIMessage(content=answer)], "query": query},
-        goto=where,
-    )
+    return {
+        "messages": [AIMessage(content=answer)],
+        "query": query,
+        "next": next_node,
+    }
 
 
 class IsComplete(BaseModel):
@@ -367,9 +380,7 @@ class IsComplete(BaseModel):
     new_query: str = Field(description="Query for additional research.")
 
 
-def route_is_complete(
-    state: TutorialState, config: RunnableConfig
-) -> Command[Literal["research", "write_answer"]]:
+def route_is_complete(state: TutorialState, config: RunnableConfig):
     """Route based on whether research is complete or more is needed.
 
     Args:
@@ -377,23 +388,19 @@ def route_is_complete(
         config: RunnableConfig for accessing configuration parameters
 
     Returns:
-        Command: Navigation command to either 'research' or 'write_answer'
+        dict: State update with 'next' set to the next node name
     """
-
-    # retrieve the LLM
     configurable = Configuration.from_runnable_config(config)
 
     if state["loop_count"] >= int(configurable.max_research_loops):
-        return Command(
-            update={
-                "messages": [
-                    AIMessage(
-                        content="Research loop count is too large. Do your best with what you have."
-                    )
-                ]
-            },
-            goto="write_answer",
-        )
+        return {
+            "messages": [
+                AIMessage(
+                    content="Research loop count is too large. Do your best with what you have."
+                )
+            ],
+            "next": "write_answer",
+        }
 
     cls = get_chat_api(configurable.llm_api)
     logging.info("LLM SELECTED: %s", cls)
@@ -406,23 +413,19 @@ def route_is_complete(
         msg.content for msg in state["messages"] if isinstance(msg, AIMessage)
     )
 
-    # format the prompt
     prompt = NODE_PROMPTS["completeness"].format(
-        query=state["query"], responses="\n\n".join(ai_messages)
+        query=state["query"],
+        responses="\n\n".join(str(m) for m in ai_messages),
     )
 
     completeness = llm.invoke([HumanMessage(content=prompt)])
-    where = "write_answer" if "yes" in completeness.decision else "research"
-
-    # Convert YesNoDecision to AIMessage
+    next_node = (
+        "write_answer" if "yes" in completeness.decision else "research"
+    )
     decision_message = AIMessage(
         content=f"Research completeness: {completeness.decision}"
     )
-
-    return Command(
-        update={"messages": [decision_message]},
-        goto=where,
-    )
+    return {"messages": [decision_message], "next": next_node}
 
 
 def write_answer(state: TutorialState, config: RunnableConfig):
@@ -511,8 +514,6 @@ def initialize(
 
     graph_builder = StateGraph(TutorialState)
 
-    # graph_builder.add_node(route_is_relevant)
-    # graph_builder.add_node(route_is_complete, defer=True)
     graph_builder.add_node(init_state)
     graph_builder.add_node(research)
     graph_builder.add_node(search_help)
@@ -520,23 +521,27 @@ def initialize(
         "search_rag", functools.partial(search_rag, datastore=datastore)
     )
     graph_builder.add_node(write_answer)
-
-    # graph_builder.add_conditional_edges(
-    #     START,
-    #     route_is_relevant,
-    #     {"yes": research.__name__, "no": write_answer.__name__},
-    # )
     graph_builder.add_node(route_is_relevant)
     graph_builder.add_node(route_is_complete, defer=True)
     graph_builder.add_edge(START, init_state.__name__)
-
     graph_builder.add_edge(init_state.__name__, route_is_relevant.__name__)
     graph_builder.add_edge(research.__name__, search_help.__name__)
     graph_builder.add_edge(research.__name__, search_rag.__name__)
     graph_builder.add_edge(search_help.__name__, route_is_complete.__name__)
     graph_builder.add_edge(search_rag.__name__, route_is_complete.__name__)
-
     graph_builder.add_edge(write_answer.__name__, END)
+
+    # Conditional edges for routing based on 'next' in state
+    graph_builder.add_conditional_edges(
+        route_is_relevant.__name__,
+        lambda state: state["next"],
+        {"research": research.__name__, "write_answer": write_answer.__name__},
+    )
+    graph_builder.add_conditional_edges(
+        route_is_complete.__name__,
+        lambda state: state["next"],
+        {"research": research.__name__, "write_answer": write_answer.__name__},
+    )
 
     return datastore, graph_builder
 
