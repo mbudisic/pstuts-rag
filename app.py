@@ -151,13 +151,13 @@ async def format_url_reference(url_ref):
                     name=f"{url_ref['title']}",
                     display="side",  # Show in the sidebar
                     url=payload.json()["data"]["screenshot"]["url"],
-                    content=f"🔗 {url_ref['title']} [(click here))]({url_ref['url']})",
+                    content=f"🔗 {url_ref['title']} [(go to website))]({url_ref['url']})",
                 )
         except Exception as e:
             logging.error(f"Error fetching screenshot: {e}")
 
     return cl.Message(
-        content=f"🔗 {url_ref['title']} [(click here)]({url_ref['url']})",
+        content=f"🔗 {url_ref['title']} [(go to website)]({url_ref['url']})",
         elements=([screenshot] if screenshot else []),
     )
 
