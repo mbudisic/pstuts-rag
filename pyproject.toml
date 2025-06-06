@@ -53,8 +53,6 @@ dependencies = [
     "beautifulsoup4>=4.13.4",
     "pathvalidate>=3.2.3",
     "pydantic-settings>=2.9.1",
-    "flake8-todos>=0.3.1",
-    "ruff>=0.11.0",
 ]
 authors = [{ name = "Marko Budisic", email = "mbudisic@gmail.com" }]
 license = "MIT"
@@ -70,13 +68,11 @@ packages = ["pstuts_rag/pstuts_rag"]
 dev = [
     "pytest>=7.0.0",
     "black>=22.0.0",
-    "flake8>=4.0.0",
-    "flake8-todos>=0.3.1",
     "mypy>=0.900",
-    "isort>=6.0.1",
     "pylint-venv>=3.0.4",
     "ipdb>=0.13.13",
     "deptry>=0.23.0",
+    "ruff"
 ]
 
 web = [
@@ -92,13 +88,12 @@ line-length = 79
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W"]
-extend-select = ["TD"]
-ignore = []
-task-tags = ["TODO", "FIXME", "BUG", "HACK", "XXX"]
+select = ["E", "F", "I", "N", "W", "TD"]
+fixable = ["I", "E", "F", "W", "B"]
 
-[tool.ruff.isort]
-known-first-party = ["src"]
+[tool.ruff.lint.isort]
+known-first-party = ["pstuts_rag"]
+
 
 [tool.black]
 line-length = 79

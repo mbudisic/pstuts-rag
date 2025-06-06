@@ -1,20 +1,17 @@
-import uuid
-import pandas as pd
-import numpy as np
-from functools import partial
-from ragas import EvaluationDataset
-from langchain_core.runnables import Runnable
-from typing import Set, Tuple, Dict, List
-from sklearn.model_selection import train_test_split
-import bidict
-from typing import Mapping
-from itertools import chain
 import asyncio
-from typing import Optional
-from tqdm import tqdm
-from .datastore import batch
+import uuid
+from functools import partial
+from typing import Dict, Mapping, Set, Tuple
+
+import bidict
 import numpy as np
+import pandas as pd
+from langchain_core.runnables import Runnable
+from ragas import EvaluationDataset
 from scipy.stats import norm
+from sklearn.model_selection import train_test_split
+
+from .datastore import batch
 
 
 async def apply_rag_chain_inplace(

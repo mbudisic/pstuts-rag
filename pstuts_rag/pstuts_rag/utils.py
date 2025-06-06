@@ -1,27 +1,16 @@
-from typing import Dict, List, Type, Any, Iterator
+import logging
+import re
+from typing import Any, Dict, Iterator, List, Type
 
+import requests
+from bs4 import BeautifulSoup
+from langchain_huggingface import ChatHuggingFace, HuggingFaceEmbeddings
+from langchain_ollama import ChatOllama
+from langchain_ollama.embeddings import OllamaEmbeddings
 from langchain_openai import ChatOpenAI
 from langchain_openai.embeddings import OpenAIEmbeddings
 
-from langchain_huggingface import ChatHuggingFace
-from langchain_huggingface import HuggingFaceEmbeddings
-
-from langchain_ollama import ChatOllama
-from langchain_ollama.embeddings import OllamaEmbeddings
-
 from pstuts_rag.configuration import ModelAPI
-import logging
-
-from contextvars import ContextVar
-from functools import wraps
-from typing import Callable, Optional
-import time
-import traceback
-
-
-import requests
-import re
-from bs4 import BeautifulSoup
 
 # Chat model selector dictionary
 ChatAPISelector: Dict[

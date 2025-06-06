@@ -1,26 +1,22 @@
-from pstuts_rag.configuration import Configuration
 import asyncio
-from typing import cast
+import logging
 import signal
+import time
 from datetime import datetime
-
-import chainlit as cl
-from dotenv import load_dotenv
-
-from langgraph.checkpoint.memory import MemorySaver
-
-from langchain_core.runnables import Runnable
-
-from pstuts_rag.datastore import Datastore
-from pstuts_rag.nodes import FinalAnswer, TutorialState, initialize
-
-import nest_asyncio
+from typing import cast
 from uuid import uuid4
 
-import logging
-
-from pstuts_rag.utils import get_unique
+import chainlit as cl
 import httpx
+import nest_asyncio
+from dotenv import load_dotenv
+from langchain_core.runnables import Runnable
+from langgraph.checkpoint.memory import MemorySaver
+
+from pstuts_rag.configuration import Configuration
+from pstuts_rag.datastore import Datastore
+from pstuts_rag.nodes import FinalAnswer, TutorialState, initialize
+from pstuts_rag.utils import get_unique
 
 # Track the single active session
 active_session = {"id": None, "timestamp": None}
@@ -113,7 +109,7 @@ def format_video_reference(doc: Document):
         display="side",
     )
     video_message = cl.Message(
-        content=f'📼 Watch {video_link.name} (_@ {v["start_min"]}_)',  # text has to include video name
+        content=f"📼 Watch {video_link.name} (_@ {v['start_min']}_)",  # text has to include video name
         elements=[video_link],
     )
 
@@ -246,12 +242,7 @@ class ChainlitCallbackHandler(BaseCallbackHandler):
             print(f"Error in on_chain_error: {e}")
 
 
-import time
-
 # TODO: Clean up imports.
-
-
-# TODO: This should be fixed - new comment
 
 
 @cl.on_message

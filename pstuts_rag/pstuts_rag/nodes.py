@@ -1,32 +1,27 @@
 # nodes.py
-from enum import Enum
-from typing import Annotated, Any, Callable, Dict, Literal, Tuple, Union
-import functools
 import asyncio
-import os
+import functools
 import logging
 import operator
-from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph, MessagesState, START, END
-from langgraph.types import Command
-from langchain_core.documents import Document
-from langchain_core.runnables import RunnableConfig
-from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
-from langgraph.checkpoint.memory import MemorySaver
-from numpy import add
-from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_tavily import TavilyExtract
+import os
+from enum import Enum
+from typing import Annotated, Dict, Literal, Tuple
 
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_core.documents import Document
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig
+from langchain_tavily import TavilyExtract
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.types import interrupt
 from pydantic import BaseModel, Field, HttpUrl
 
-from langgraph.types import interrupt
-from langgraph.checkpoint.memory import MemorySaver
-
-from pstuts_rag.utils import get_chat_api, get_title_streaming
 from pstuts_rag.configuration import Configuration
 from pstuts_rag.datastore import Datastore
 from pstuts_rag.prompts import NODE_PROMPTS
 from pstuts_rag.rag_for_transcripts import create_transcript_rag_chain
+from pstuts_rag.utils import get_chat_api, get_title_streaming
 
 
 class YesNoAsk(Enum):

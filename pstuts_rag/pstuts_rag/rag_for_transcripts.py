@@ -1,28 +1,24 @@
-import functools
 import json
-import asyncio
-from operator import itemgetter
-from typing import Any, Dict, Union, Optional, Callable
-import logging
 import re
+from operator import itemgetter
+from typing import Any, Dict
 
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import (
     Runnable,
-    RunnableParallel,
-    RunnablePassthrough,
     RunnableConfig,
     RunnableLambda,
+    RunnableParallel,
+    RunnablePassthrough,
 )
 from langchain_openai import ChatOpenAI
-from langchain_huggingface import ChatHuggingFace
-from langchain_ollama import ChatOllama
+
+from pstuts_rag.configuration import Configuration
+from pstuts_rag.utils import ChatAPISelector
 
 from .datastore import Datastore
 from .prompts import RAG_PROMPT_TEMPLATES
-from pstuts_rag.utils import ChatAPISelector
-from pstuts_rag.configuration import Configuration, ModelAPI
 
 
 def post_process_response(
@@ -57,11 +53,6 @@ def post_process_response(
         if configurable.eva_strip_think
         else answer.content
     )
-    # Only append references if the model provided a substantive answer
-    # if "I don't know" not in answer.content:
-    #     text_w_references = "\n".join(
-    #         [str(text_w_references), "**REFERENCES**", references]
-    #     )
 
     if "I don't know." in answer_text:
         attachments = []

@@ -1,32 +1,26 @@
 import asyncio
 import atexit
-import json
 import glob
-import aiofiles
-from pathlib import Path
-from typing import List, Dict, Iterator, Any, Callable, Optional, Self
-import uuid
+import json
 import logging
 import threading
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterator, List, Optional, Self
 
+import aiofiles
 import chainlit as cl
-from langchain_core.document_loaders import BaseLoader
-from langchain_experimental.text_splitter import SemanticChunker
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_openai.embeddings import OpenAIEmbeddings
-from langchain_ollama.embeddings import OllamaEmbeddings
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-
 from langchain_core.vectorstores import VectorStoreRetriever
-
+from langchain_experimental.text_splitter import SemanticChunker
 from langchain_qdrant import QdrantVectorStore
-from pstuts_rag.configuration import Configuration, ModelAPI
+from pathvalidate import sanitize_filename, sanitize_filepath
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 from qdrant_client.models import PointStruct
-from pstuts_rag.utils import get_embeddings_api, flatten, batch
-from pathvalidate import sanitize_filename, sanitize_filepath
+
+from pstuts_rag.configuration import Configuration
+from pstuts_rag.utils import batch, flatten, get_embeddings_api
 
 
 class QdrantClientSingleton:
