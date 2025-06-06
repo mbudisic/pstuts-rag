@@ -26,6 +26,8 @@ The application features a beautiful **sepia-toned color scheme** that gives it 
 
 Users can toggle between light and dark variants using the theme switcher in the interface.
 
+🤗 HuggingFace is updated from Github.
+
 ## 🚀 Getting Started
 
 1. Install dependencies:
