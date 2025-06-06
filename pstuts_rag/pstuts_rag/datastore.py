@@ -1,5 +1,6 @@
 import asyncio
 import atexit
+from enum import Enum
 import glob
 import json
 import logging
@@ -22,6 +23,7 @@ from qdrant_client.models import PointStruct
 from pstuts_rag.configuration import Configuration
 from pstuts_rag.utils import batch, flatten, get_embeddings_api
 
+# TODO: Write MCP server that ingests `mp4` folder
 
 class QdrantClientSingleton:
     """
@@ -42,7 +44,7 @@ class QdrantClientSingleton:
         )
         from qdrant_client import QdrantClient
 
-        with cls._lock:
+        with cls._lock:Add a tool to generate the markdown artifact
             if cls._instance is None:
                 if path is None:
                     cls._instance = QdrantClient(location=":memory:")
@@ -52,6 +54,15 @@ class QdrantClientSingleton:
                     cls._config = path
             # Ignore any subsequent path changes, always return the first-initialized client
             return cls._instance
+
+
+class LoadingState(Enum):
+    NOT_STARTED = "not_started"
+    LOADING = "loading"
+    COMPLETE = "complete"
+
+
+# TODO: accumulate transcripts of videos when loading, summarize each, then summarize summaries to get a description of the dataset for the prompt
 
 
 class Datastore:
@@ -78,6 +89,7 @@ class Datastore:
     vector_store: QdrantVectorStore
     dimensions: int
     loading_complete: asyncio.Event
+    loading_state: LoadingState = LoadingState.NOT_STARTED
     _completion_callbacks: List[Callable]
     config: Configuration
     reload: bool = True
@@ -132,7 +144,9 @@ class Datastore:
 
         # determine embedding dimension
         self.dimensions = len(self.embeddings.embed_query("test"))
-        self.collection_name = self.name + "_transcripts"
+        self.collection_name = (
+            sanitize_filename(config.transcript_glob) + "_transcripts"
+        )
         # Try to create the collection, fall back to get_collection if it already exists
         try:
             self.qdrant_client.create_collection(
@@ -141,12 +155,22 @@ class Datastore:
                     size=self.dimensions, distance=Distance.COSINE
                 ),
             )
-            logging.info(f"Collection {self.collection_name} created.")
+            logging.info(
+                f"Collection {self.collection_name} created. Will reload."
+            )
             self.reload = True
         except ValueError:
-            self.qdrant_client.get_collection(self.collection_name)
-            logging.info(f"Collection {self.collection_name} already exists.")
-            self.reload = self.config.eva_reinitialize
+
+            count = self.count_docs()
+            logging.info(
+                f"Collection {self.collection_name} already exists (w/ {count} documents)."
+            )
+
+            self.reload = count == 0 or self.config.eva_reinitialize
+            if self.reload:
+                logging.warning("Reloading collection.")
+            else:
+                logging.info("Skipping reload.")
 
         # wrapper around the client
         self.vector_store = QdrantVectorStore(
@@ -168,33 +192,45 @@ class Datastore:
             -
         """
 
+        if not (self.loading_state == LoadingState.NOT_STARTED):
+            logging.info(
+                "Cannot restart loading. Current state: %s", self.loading_state
+            )
+            return 0
+        self.loading_state = LoadingState.LOADING
+
         doc_count = self.count_docs()
         if not (self.reload):
+            self.loading_state = LoadingState.COMPLETE
             self.loading_complete.set()
             msg = f"Skipping initialization. Database holds {doc_count} documents."
             await cl.Message(content=msg).send()
             logging.warning(msg)
             return doc_count
 
-        logging.debug("Starting to load files.")
         files = globs_to_paths(globs)
+        logging.info(f"Starting to load {len(files)} files.")
 
         tasks = [load_json_file(f) for f in files]
         results = await asyncio.gather(*tasks)
 
         json_transcripts = list(flatten(results))
-        logging.debug("Received %d JSON files.", len(json_transcripts))
+        logging.info(
+            "Received %d JSON files. Chunking....", len(json_transcripts)
+        )
 
         # perform chunking
         self.docs: List[Document] = await chunk_transcripts(
             json_transcripts=json_transcripts,
             semantic_chunker_embedding_model=self.embeddings,
         )
-
+        logging.info("Embedding chunks...")
         count = await self.embed_chunks(self.docs)
-        logging.debug("Uploaded %d records.", count)
+        logging.info("Uploaded %d records.", count)
 
+        self.loading_state = LoadingState.COMPLETE
         self.loading_complete.set()
+
         # Execute callbacks (both sync and async)
         for callback in self._completion_callbacks:
             if asyncio.iscoroutinefunction(callback):

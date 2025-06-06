@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 import signal
 import time
 from datetime import datetime
@@ -10,6 +11,7 @@ import chainlit as cl
 import httpx
 import nest_asyncio
 from dotenv import load_dotenv
+from langchain_core.documents import Document
 from langchain_core.runnables import Runnable
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -32,6 +34,8 @@ nest_asyncio.apply()
 # Generate a unique ID for this application instance
 unique_id = uuid4().hex[0:8]
 
+# TODO: Create an introduction message here that explains the purpose of the app
+
 
 @cl.on_chat_start
 async def on_chat_start():
@@ -48,6 +52,21 @@ async def on_chat_start():
     global active_session
     session_id = cl.context.session.id
     current_time = datetime.now()
+
+    # Eva introduction message
+    await cl.Message(
+        content=(
+            "👋 Hi there! I'm **Eva**, your friendly Photoshop expert AI.\n\n"
+            "I'm here to help you with all your Photoshop questions, using real answers from training video transcripts. 🎥✨\n\n"
+            "**How I work:**\n"
+            "- I answer using only what's in the official training videos.\n"
+            "- If I find the answer, I'll include the timestamp so you can jump right to it! ⏱️\n"
+            "- If it's not covered, I'll let you know honestly—no guessing, no made-up info.\n\n"
+            "Feel free to ask anything about Photoshop, and let's get creative together! 🖼️🖱️\n"
+            "---"
+        ),
+        author="Eva",
+    ).send()
 
     # Deactivate any previous session
     active_session = {"id": session_id, "timestamp": current_time}
@@ -85,9 +104,6 @@ async def on_chat_start():
     cl.user_session.set("checkpointer", checkpointer)
     cl.user_session.set("ai_graph", ai_graph)
     cl.user_session.set("thread_id", thread_id)
-
-
-from langchain_core.documents import Document
 
 
 def format_video_reference(doc: Document):
@@ -173,6 +189,7 @@ class ChainlitCallbackHandler(BaseCallbackHandler):
         self.current_step = None
         self.step_counter = 0
 
+    # TODO: Make the step label update instead of add
     async def on_chain_start(self, serialized, inputs, **kwargs):
         """
         Called when a new chain/graph step starts.
@@ -246,7 +263,7 @@ class ChainlitCallbackHandler(BaseCallbackHandler):
 
 
 @cl.on_message
-async def main(input_message: cl.Message):
+async def message_handler(input_message: cl.Message):
     """
     Main message handler for incoming user messages in Chainlit.
 
@@ -294,7 +311,7 @@ async def main(input_message: cl.Message):
             tokens = list(msg.content)
             for token in tokens:
                 await final_msg.stream_token(token)
-                time.sleep(0.01)
+                time.sleep(0.02 / random.uniform(1, 10))
             if final_msg:
                 await final_msg.update()
 

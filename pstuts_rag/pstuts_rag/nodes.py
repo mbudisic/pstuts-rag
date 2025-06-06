@@ -110,6 +110,7 @@ class QueryMessage(AIMessage):
         )
 
 
+# TODO More robust generation of queries - multiquery launch
 def research(state: TutorialState, config: RunnableConfig):
     """Generate a research query based on conversation history and current query.
 
@@ -265,6 +266,7 @@ async def search_help(state: TutorialState, config: RunnableConfig):
     return response
 
 
+# use advanced ensemble retrieval BM25 w/ dense vector
 async def search_rag(
     state: TutorialState, config: RunnableConfig, datastore: Datastore
 ):
@@ -421,6 +423,10 @@ def route_is_complete(state: TutorialState, config: RunnableConfig):
         content=f"Research completeness: {completeness.decision}"
     )
     return {"messages": [decision_message], "next": next_node}
+
+
+# TODO: Produce Markdown artifact with embedded references
+# TODO: Consider reviewing the document and interspersing the links based on their descriptions where most needed
 
 
 def write_answer(state: TutorialState, config: RunnableConfig):
