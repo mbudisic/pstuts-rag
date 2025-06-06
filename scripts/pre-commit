@@ -1,8 +1,8 @@
 #!/bin/sh
-# Manual pre-commit hook: Generates TODO.md using flake8-todos and stages it.
+# Manual pre-commit hook: Generates TODO.md using grep-based script and stages it.
 # To install: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 
-uv run python scripts/generate_todo_md.py
+uvx python generate_todo_md.py
 if [ -f TODO.md ]; then
   git add TODO.md
 fi 
