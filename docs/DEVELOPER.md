@@ -479,3 +479,28 @@ print(title)  # Prints the best available title, or None
 ---
 
 > "A page by any other name would still be as sweet... but it's nice to get the right one!" 😄 
+
+## 📝 Automatic TODO Extraction
+
+This repo uses [`flake8-todos`](https://github.com/awestlake87/flake8-todos) to collect all TODO-style comments from Python files and writes them to a `TODO.md` file at the project root.
+
+### How it works
+- Run `uv run python scripts/generate_todo_md.py` to (re)generate `TODO.md`.
+- A **manual pre-commit hook** is provided to automate this:
+  1. Copy it into your git hooks:  
+     `cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`
+  2. On every commit, it will update `TODO.md` and stage it automatically.
+
+### Why manual?
+- This hook is not installed by default. You must opt-in by copying it yourself (see above).
+- This keeps your workflow flexible and avoids surprises for new contributors.
+
+### Example output
+```
+# 📝 TODOs in Codebase
+
+- `pstuts_rag/agent.py:42`: TD003 TODO: Refactor this function
+- `scripts/generate_todo_md.py:10`: TD002 FIXME: Handle edge case
+```
+
+Happy hacking! 🚀 
