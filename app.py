@@ -261,6 +261,8 @@ class ChainlitCallbackHandler(BaseCallbackHandler):
 
 # TODO: Clean up imports.
 
+# TODO Add buttons with pregenerated queries
+
 
 @cl.on_message
 async def message_handler(input_message: cl.Message):
