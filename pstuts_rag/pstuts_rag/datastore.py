@@ -25,6 +25,7 @@ from pstuts_rag.utils import batch, flatten, get_embeddings_api
 
 # TODO: Write MCP server that ingests `mp4` folder
 
+
 class QdrantClientSingleton:
     """
     Thread-safe singleton for QdrantClient. Ignores path changes after first initialization.
@@ -44,7 +45,7 @@ class QdrantClientSingleton:
         )
         from qdrant_client import QdrantClient
 
-        with cls._lock:Add a tool to generate the markdown artifact
+        with cls._lock:
             if cls._instance is None:
                 if path is None:
                     cls._instance = QdrantClient(location=":memory:")
