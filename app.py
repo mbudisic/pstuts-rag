@@ -27,6 +27,7 @@ from pstuts_rag.nodes import (
     YesNoDecision,
 )
 from pstuts_rag.utils import get_unique
+from version import __version__
 
 # Track the single active session
 active_session = {"id": None, "timestamp": None}
@@ -97,8 +98,9 @@ async def on_chat_start():
     # Eva introduction message
     await cl.Message(
         content=(
-            "👋 Hi there! I'm **Eva**, your friendly Photoshop expert AI.\n\n"
+            f"👋 Hi there! I'm **Eva v.{__version__}**, your friendly Photoshop expert AI.\n\n"
             "---\n\n"
+            "I was created as the demo app for [AI Makerspace](aimakerspace.io) Cohort 6 using Adobe Research [PsTuts data](https://github.com/adobe-research/PsTuts-VQA-Dataset).\n"
             "I'm here to help you with all your Photoshop questions, using real answers from training video transcripts. 🎥✨\n\n"
             "**How I work:**\n"
             "- I answer using only what's in the official training videos and in Adobe Help website.\n"

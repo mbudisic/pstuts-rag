@@ -268,6 +268,54 @@ ipdb  # Available for interactive debugging
    - `evaluate_rag.ipynb` for systematic evaluation
    - Fine-tuning experiments in `Fine_Tuning_Embedding_for_PSTuts.ipynb`
 
+## 🏷️ Versioning & Automated Tagging Workflow
+
+This project uses **semantic versioning** and automated GitHub Actions to keep track of releases and make version management a breeze! 🚀
+
+### 📦 Where is the version stored?
+- The current app version is stored in [`version.py`](../version.py) at the project root:
+  ```python
+  __version__ = "1.0.0"
+  ```
+- This version is displayed to users in the app UI ("I'm Eva v.X.Y.Z...").
+
+### 🔼 How to bump the version
+1. Edit `version.py` and update the `__version__` string (e.g., to `1.1.0`).
+2. Commit the change to the `main` branch:
+   ```bash
+   git add version.py
+   git commit -m "chore: Bump version to 1.1.0"
+   git push
+   ```
+
+### 🤖 What happens next? (GitHub Actions magic)
+- On every push to `main` that changes `version.py`, a GitHub Actions workflow (`.github/workflows/tag-on-version.yml`) runs:
+  1. Extracts the version from `version.py`.
+  2. Checks if a tag `vX.Y.Z` already exists.
+  3. If not, creates and pushes a tag (e.g., `v1.1.0`) to the repo.
+- The workflow uses the official [`actions/checkout`](https://github.com/actions/checkout) and is granted `contents: write` permission to push tags.
+
+### 🏷️ Tags & Releases
+- Tags are visible in the [GitHub Releases](../../releases) and [Tags](../../tags) pages.
+- You can create a GitHub Release from any tag for changelogs, downloads, etc.
+- The latest version is always shown in the README badge:
+  ![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/mbudisic/PsTuts-RAG?label=version&sort=semver)
+
+### 📝 Example: Bumping the Version
+```bash
+# 1. Edit version.py to set __version__ = "1.2.0"
+# 2. Commit and push to main
+# 3. The workflow will create and push tag v1.2.0 automatically!
+```
+
+### 📚 References
+- [PEP 396 – Module Version Numbers](https://peps.python.org/pep-0396/)
+- [GitHub Actions: Workflow syntax](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions)
+- [GitHub Actions: GITHUB_TOKEN permissions](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token)
+- [shields.io: GitHub tag badge](https://shields.io/category/version)
+
+---
+
 ## 🌊 Lazy Graph Initialization
 
 The project uses a **lazy initialization pattern** for the LangGraph to avoid expensive compilation during module imports while maintaining compatibility with LangGraph Studio.
