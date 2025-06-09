@@ -404,9 +404,23 @@ async def message_handler(input_message: cl.Message):
 
     response = cast(TutorialState, raw_response)
 
+    # Start formatting tasks early to maximize concurrency.
+    # Video reference formatting is synchronous, so we just collect the messages.
+    # URL reference formatting is asynchronous (may involve network I/O), so we schedule those as tasks.
+    # By starting the async tasks before streaming the answer, we allow them to run in the background while the answer is being streamed,
+    # reducing the total perceived latency for the user.
+    video_reference_messages = [
+        format_video_reference(v)
+        for v in get_unique(response["video_references"])
+    ]
+    url_reference_tasks = [
+        asyncio.create_task(format_url_reference(u))
+        for u in get_unique(response["url_references"])
+    ]
+
+    # Stream the final answer token-by-token for a typing effect
     for msg in response["messages"]:
         if isinstance(msg, FinalAnswer):
-            # Stream the final answer token-by-token for a typing effect
             final_msg = cl.Message(content="", author=msg.type)
             await final_msg.send()
             tokens = list(msg.content)
@@ -416,22 +430,17 @@ async def message_handler(input_message: cl.Message):
             if final_msg:
                 await final_msg.update()
 
+    # After streaming the answer, display video references (synchronous)
     await cl.Message(
         content=f"Formatting {len(response['video_references'])} video references."
     ).send()
+    for msg in video_reference_messages:
+        await msg.send()
 
-    # Send all unique video references as separate messages
-    for v in get_unique(response["video_references"]):
-        await format_video_reference(v).send()
-
+    # Await and display URL references (asynchronous)
     await cl.Message(
         content=f"Formatting {len(response['url_references'])} website references."
     ).send()
-
-    # Send all unique URL references as separate messages (with screenshots if available)
-    url_reference_tasks = [
-        format_url_reference(u) for u in get_unique(response["url_references"])
-    ]
     url_reference_messages = await asyncio.gather(*url_reference_tasks)
     for msg in url_reference_messages:
         await msg.send()
