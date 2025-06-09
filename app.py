@@ -37,6 +37,23 @@ unique_id = uuid4().hex[0:8]
 # TODO: Create an introduction message here that explains the purpose of the app
 
 
+async def sample_prompt_send(action: cl.Action):
+    # Simulate a user message using the payload
+    msg = cl.Message(content=action.payload["text"], author="user")
+    await msg.send()
+    time.sleep(0.5)
+    await message_handler(msg)  # send the message to LLM for response
+
+
+sample_prompts = {
+    "sample_layers": "What are layers?",
+    "sample_lasso": "How do I use lasso when the background is very busy?",
+}
+
+for sample_label in sample_prompts:
+    sample_prompt_send = cl.action_callback(sample_label)(sample_prompt_send)
+
+
 @cl.on_chat_start
 async def on_chat_start():
     """
@@ -53,28 +70,40 @@ async def on_chat_start():
     session_id = cl.context.session.id
     current_time = datetime.now()
 
+    sample_actions = [
+        cl.Action(
+            name=name,
+            label='"%s"' % text,
+            payload={"text": text},
+            icon="mouse-pointer-click",
+        )
+        for name, text in sample_prompts.items()
+    ]
+
+    await cl.Message(
+        content=f"🟢 Session ID: `{session_id[:8]}` active.",
+        author="System",
+    ).send()
+
     # Eva introduction message
     await cl.Message(
         content=(
             "👋 Hi there! I'm **Eva**, your friendly Photoshop expert AI.\n\n"
+            "---\n\n"
             "I'm here to help you with all your Photoshop questions, using real answers from training video transcripts. 🎥✨\n\n"
             "**How I work:**\n"
             "- I answer using only what's in the official training videos.\n"
             "- If I find the answer, I'll include the timestamp so you can jump right to it! ⏱️\n"
             "- If it's not covered, I'll let you know honestly—no guessing, no made-up info.\n\n"
             "Feel free to ask anything about Photoshop, and let's get creative together! 🖼️🖱️\n"
-            "---"
+            "Click on the following buttons to try out some sample prompts:\n"
         ),
+        actions=sample_actions,
         author="Eva",
     ).send()
 
     # Deactivate any previous session
     active_session = {"id": session_id, "timestamp": current_time}
-
-    await cl.Message(
-        content=f"🟢 **Active Session**\nSession ID: `{session_id[:8]}...`\n\nYou can now send messages.",
-        author="System",
-    ).send()
 
     configuration = Configuration()
     # Generate a unique thread_id for this chat session
