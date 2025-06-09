@@ -16,6 +16,7 @@ from langchain_core.documents import Document
 from langchain_core.runnables import Runnable
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
+from chainlit.input_widget import Select
 
 from pstuts_rag.configuration import Configuration
 from pstuts_rag.datastore import Datastore
@@ -43,24 +44,6 @@ unique_id = uuid4().hex[0:8]
 
 # TODO: Create an introduction message here that explains the purpose of the app
 
-# 1. Define Chainlit settings schema for EVA_SEARCH_PERMISSION
-cl.Settings(
-    [
-        cl.Dropdown(
-            id="eva_search_permission",
-            label="Web Search Permission",
-            description="Allow the AI to perform web searches?",
-            values=[
-                {"label": "Ask every time", "value": "ask"},
-                {"label": "Always allow", "value": "yes"},
-                {"label": "Never allow", "value": "no"},
-            ],
-            default_value="no",
-            required=True,
-        )
-    ]
-)
-
 
 async def sample_prompt_send(action: cl.Action):
     # Simulate a user message using the payload
@@ -73,6 +56,7 @@ async def sample_prompt_send(action: cl.Action):
 sample_prompts = {
     "sample_layers": "What are layers?",
     "sample_lasso": "How do I use lasso when the background is very busy?",
+    "sample_paris": "What is the capital of France?",
 }
 
 for sample_label in sample_prompts:
@@ -117,7 +101,8 @@ async def on_chat_start():
             "---\n\n"
             "I'm here to help you with all your Photoshop questions, using real answers from training video transcripts. 🎥✨\n\n"
             "**How I work:**\n"
-            "- I answer using only what's in the official training videos.\n"
+            "- I answer using only what's in the official training videos and in Adobe Help website.\n"
+            "- You can decide to let me use the Adobe Help or not (or ask every time) using the gear button next to the prompt textbox.\n"
             "- If I find the answer, I'll include the timestamp so you can jump right to it! ⏱️\n"
             "- If it's not covered, I'll let you know honestly—no guessing, no made-up info.\n\n"
             "Feel free to ask anything about Photoshop, and let's get creative together! 🖼️🖱️\n"
@@ -131,17 +116,27 @@ async def on_chat_start():
     active_session = {"id": session_id, "timestamp": current_time}
 
     configuration = Configuration()
-    # Generate a unique thread_id for this chat session
     thread_id = f"chat_{uuid4().hex[:8]}"
     configuration.thread_id = thread_id
 
-    # Set initial Chainlit setting for EVA_SEARCH_PERMISSION
     cl.user_session.set(
         "eva_search_permission", configuration.search_permission
     )
-    await cl.set_settings(
-        {"eva_search_permission": configuration.search_permission}
-    )
+
+    # Map permission to index for initial selection
+    permission_to_index = {"ask": 0, "yes": 1, "no": 2}
+    initial_index = permission_to_index.get(configuration.search_permission, 2)
+
+    await cl.ChatSettings(
+        [
+            Select(
+                id="eva_search_permission",
+                label="Web Search Permission",
+                values=["ask", "yes", "no"],
+                initial_index=initial_index,
+            )
+        ]
+    ).send()
 
     # Instantiate the Datastore and register a callback to notify when loading is complete
     datastore = Datastore(config=configuration)
