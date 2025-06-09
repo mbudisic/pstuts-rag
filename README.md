@@ -9,6 +9,8 @@ license: mit
 short_description: Agentic RAG that interrogates the PsTuts dataset.
 ---
 
+![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/mbudisic/PsTuts-RAG?label=version&sort=semver)
+
 Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
 
 # 🤖 PsTuts RAG System
