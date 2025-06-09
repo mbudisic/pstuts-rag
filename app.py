@@ -11,13 +11,20 @@ import chainlit as cl
 import httpx
 import nest_asyncio
 from dotenv import load_dotenv
+from langchain.callbacks.base import BaseCallbackHandler
 from langchain_core.documents import Document
 from langchain_core.runnables import Runnable
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import Command
 
 from pstuts_rag.configuration import Configuration
 from pstuts_rag.datastore import Datastore
-from pstuts_rag.nodes import FinalAnswer, TutorialState, initialize
+from pstuts_rag.nodes import (
+    FinalAnswer,
+    TutorialState,
+    initialize,
+    YesNoDecision,
+)
 from pstuts_rag.utils import get_unique
 
 # Track the single active session
@@ -203,9 +210,6 @@ async def format_url_reference(url_ref):
     )
 
 
-from langchain.callbacks.base import BaseCallbackHandler
-
-
 class ChainlitCallbackHandler(BaseCallbackHandler):
     """
     Custom callback handler for Chainlit to visualize the execution of LangChain chains/graphs.
@@ -293,6 +297,42 @@ class ChainlitCallbackHandler(BaseCallbackHandler):
 # TODO Add buttons with pregenerated queries
 
 
+async def handle_interrupt(query: str) -> YesNoDecision:
+
+    try:
+        user_input = await cl.AskActionMessage(
+            content="Search has been interrupted. Do you approve query: '%s' to be sent to Adobe Help?"
+            % query,
+            timeout=30,
+            raise_on_timeout=True,
+            actions=[
+                cl.Action(
+                    name="approve",
+                    payload={"value": "yes"},
+                    label="✅ Approve",
+                ),
+                cl.Action(
+                    name="cancel",
+                    payload={"value": "cancel"},
+                    label="❌ Cancel web search",
+                ),
+            ],
+        ).send()
+        if user_input and user_input.get("payload").get("value") == "yes":
+            return YesNoDecision(decision="yes")
+        else:
+            return YesNoDecision(decision="no")
+
+    except TimeoutError:
+        await cl.Message(
+            "Timeout: No response from user. Canceling search."
+        ).send()
+        return YesNoDecision(decision="no")
+
+
+from pstuts_rag.nodes import YesNoDecision
+
+
 @cl.on_message
 async def message_handler(input_message: cl.Message):
     """
@@ -329,10 +369,24 @@ async def message_handler(input_message: cl.Message):
     config = configuration.to_runnable_config()
     config["callbacks"] = [ChainlitCallbackHandler()]
 
-    response = cast(
-        TutorialState,
-        await ai_graph.ainvoke({"query": input_message.content}, config),
+    raw_response = await ai_graph.ainvoke(
+        {"query": input_message.content}, config
     )
+
+    if "__interrupt__" in raw_response:
+        logging.warning("*** INTERRUPT ***")
+
+        logging.info(raw_response["__interrupt__"])
+
+        answer: YesNoDecision = await handle_interrupt(
+            raw_response["__interrupt__"][-1].value["query"]
+        )
+
+        raw_response = await ai_graph.ainvoke(
+            Command(resume=answer.decision), config
+        )
+
+    response = cast(TutorialState, raw_response)
 
     for msg in response["messages"]:
         if isinstance(msg, FinalAnswer):
@@ -346,9 +400,17 @@ async def message_handler(input_message: cl.Message):
             if final_msg:
                 await final_msg.update()
 
+    await cl.Message(
+        content=f"Formatting {len(response['video_references'])} video references."
+    ).send()
+
     # Send all unique video references as separate messages
     for v in get_unique(response["video_references"]):
         await format_video_reference(v).send()
+
+    await cl.Message(
+        content=f"Formatting {len(response['url_references'])} website references."
+    ).send()
 
     # Send all unique URL references as separate messages (with screenshots if available)
     url_reference_tasks = [

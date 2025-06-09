@@ -185,10 +185,10 @@ async def search_help(state: TutorialState, config: RunnableConfig):
         logging.info("search_help: asking permission")
 
         response = interrupt(
-            (
-                f"Do you allow Internet search for query '{query}'?"
-                "Answer 'yes' will perform the search, any other answer will skip it."
-            )
+            {
+                "message": "Do you allow Internet search for this query?",
+                "query": query,
+            }
         )
 
         logging.info(f"Permission response '{response}'")
@@ -305,6 +305,24 @@ class YesNoDecision(BaseModel):
     """
 
     decision: Literal["yes", "no"] = Field(description="Yes or no decision.")
+
+    @classmethod
+    def from_string(cls, value: str) -> "YesNoDecision":
+        """Parse a string and return a YesNoDecision instance, mapping common affirmatives to 'yes', others to 'no'."""
+        affirmatives = {
+            "yes",
+            "y",
+            "true",
+            "ok",
+            "okay",
+            "sure",
+            "1",
+            "fine",
+            "alright",
+        }
+        if value.strip().lower() in affirmatives:
+            return cls(decision="yes")
+        return cls(decision="no")
 
 
 class URLReference(BaseModel):
