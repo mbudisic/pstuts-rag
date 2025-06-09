@@ -63,6 +63,7 @@ chainlit run app.py
 - Web search integration via Tavily
 - Semantic chunking for better context retrieval
 - Interactive chat interface through Chainlit
+- 🌐 **Web Search Permission Control**: You can now set whether the AI is allowed to perform web searches directly from the chat settings (top right ⚙️). Choose between "Ask every time", "Always allow", or "Never allow" for full control!
 
 ## ⚙️ Configuration Options
 
@@ -80,7 +81,7 @@ You can customize the behavior of PsTuts RAG using environment variables. Set th
 | `MAX_RESEARCH_LOOPS` | 🔁 Maximum number of research loops to perform. Default: `3` |
 | `LLM_TOOL_MODEL` | 🛠️ Name of the LLM model to use for tool calling. Default: `smollm2:1.7b-instruct-q2_K` |
 | `N_CONTEXT_DOCS` | 📚 Number of context documents to retrieve for RAG. Default: `2` |
-| `EVA_SEARCH_PERMISSION` | 🌐 Permission for search (`yes`, `no`, or `ask`). Default: `no` |
+| `EVA_SEARCH_PERMISSION` | 🌐 Permission for search (`yes`, `no`, or `ask`). Default: `no`. **Can also be set in the chat UI!** |
 | `EVA_DB_PERSIST` | 💾 Path or flag for DB persistence. Default: unset |
 | `EVA_REINITIALIZE` | 🔄 If true, reinitializes EVA DB. Default: `False` |
 | `THREAD_ID` | 🧵 Thread ID for the current session. Default: unset |

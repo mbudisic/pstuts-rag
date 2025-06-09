@@ -43,6 +43,24 @@ unique_id = uuid4().hex[0:8]
 
 # TODO: Create an introduction message here that explains the purpose of the app
 
+# 1. Define Chainlit settings schema for EVA_SEARCH_PERMISSION
+cl.Settings(
+    [
+        cl.Dropdown(
+            id="eva_search_permission",
+            label="Web Search Permission",
+            description="Allow the AI to perform web searches?",
+            values=[
+                {"label": "Ask every time", "value": "ask"},
+                {"label": "Always allow", "value": "yes"},
+                {"label": "Never allow", "value": "no"},
+            ],
+            default_value="no",
+            required=True,
+        )
+    ]
+)
+
 
 async def sample_prompt_send(action: cl.Action):
     # Simulate a user message using the payload
@@ -116,6 +134,14 @@ async def on_chat_start():
     # Generate a unique thread_id for this chat session
     thread_id = f"chat_{uuid4().hex[:8]}"
     configuration.thread_id = thread_id
+
+    # Set initial Chainlit setting for EVA_SEARCH_PERMISSION
+    cl.user_session.set(
+        "eva_search_permission", configuration.search_permission
+    )
+    await cl.set_settings(
+        {"eva_search_permission": configuration.search_permission}
+    )
 
     # Instantiate the Datastore and register a callback to notify when loading is complete
     datastore = Datastore(config=configuration)
@@ -292,11 +318,6 @@ class ChainlitCallbackHandler(BaseCallbackHandler):
             print(f"Error in on_chain_error: {e}")
 
 
-# TODO: Clean up imports.
-
-# TODO Add buttons with pregenerated queries
-
-
 async def handle_interrupt(query: str) -> YesNoDecision:
 
     try:
@@ -429,6 +450,18 @@ async def end():
     """
     session_id = cl.context.session.id
     logging.info(f"Session ended: {session_id}")
+
+
+# 2. Update Configuration on settings update
+@cl.on_settings_update
+async def on_settings_update(settings):
+    configuration = cl.user_session.get("configuration")
+    if configuration and "eva_search_permission" in settings:
+        configuration.search_permission = settings["eva_search_permission"]
+        cl.user_session.set("configuration", configuration)
+        cl.user_session.set(
+            "eva_search_permission", settings["eva_search_permission"]
+        )
 
 
 if __name__ == "__main__":

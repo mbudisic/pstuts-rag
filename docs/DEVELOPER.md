@@ -506,3 +506,17 @@ This repo uses [`flake8-todos`](https://github.com/awestlake87/flake8-todos) to 
 Happy hacking! 🚀 
 
 <!-- Test edit for TODO.md automation check -->
+
+## 🛠️ Chainlit Settings Integration: Web Search Permission 🌐
+
+You can now control the EVA web search permission (`EVA_SEARCH_PERMISSION`) directly from the Chainlit chat UI! 🎛️
+
+- The setting appears as a dropdown in the chat settings (top right ⚙️):
+  - "Ask every time" (ask)
+  - "Always allow" (yes)
+  - "Never allow" (no)
+- When the user changes this setting, the backend updates the `Configuration` object in the session, so all subsequent actions use the new value.
+- The rest of the app always reads the current value from the session's `Configuration`.
+
+**How to extend:**
+- To add more user-configurable settings, just add them to the Chainlit settings schema and update the session's `Configuration` in the `@cl.on_settings_update` handler. Easy as pie! 🥧
