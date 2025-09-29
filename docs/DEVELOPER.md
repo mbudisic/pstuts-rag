@@ -220,6 +220,73 @@ custom_theme = "/public/theme.json"  # Enable custom sepia theme
 
 The sepia theme creates a warm, nostalgic atmosphere perfect for Adobe Photoshop tutorials, giving the application a distinctive visual identity that stands out from standard blue/gray interfaces. 📸✨
 
+### 🎭 Icon Customization
+
+Chainlit supports comprehensive icon customization through the `public/` directory. You can customize:
+
+#### 📁 Icon File Structure
+```
+public/
+├── theme.json              # Your existing theme
+├── logo_light.png          # Logo for light mode (optional)
+├── logo_dark.png           # Logo for dark mode (optional)
+├── favicon.ico             # Browser tab icon (optional)
+└── avatars/                # Message avatars (optional)
+    ├── eva.png             # Eva AI assistant avatar
+    ├── system.png          # System message avatar
+    └── user.png            # User message avatar
+```
+
+#### 🎯 Icon Specifications
+
+**Logo Files:**
+- **Size**: 200x200px recommended
+- **Format**: PNG with transparent background
+- **Naming**: Must be exactly `logo_light.png` and `logo_dark.png`
+
+**Favicon:**
+- **Size**: 32x32px or 64x64px
+- **Format**: `.ico` (preferred) or `.png`
+- **Naming**: Must be exactly `favicon.ico` or `favicon.png`
+
+**Avatars:**
+- **Size**: 64x64px recommended
+- **Format**: PNG with transparent background
+- **Naming**: Must match the author name in your code
+  - `eva.png` for author="Eva"
+  - `system.png` for author="System"
+  - `user.png` for user messages
+
+#### 🚀 How to Apply Changes
+
+1. **Add your icon files** to the `public/` folder
+2. **Restart your Chainlit application**:
+   ```bash
+   chainlit run app.py
+   ```
+3. **Clear browser cache** if icons don't appear immediately
+
+#### 🛠️ Quick Setup Script
+
+A helper script is available to generate example icons:
+
+```bash
+cd public/
+python3 example_setup.py
+```
+
+This creates basic icons with your theme colors and the "P" for PsTuts branding.
+
+#### 💡 Pro Tips
+
+- Use **transparent backgrounds** for better integration
+- Keep file sizes small for faster loading
+- Test both light and dark modes
+- Use consistent styling across all icons
+- Match avatar names to your message authors in `app.py`
+
+For more details, see the [Chainlit Custom Logo and Favicon documentation](https://docs.chainlit.io/customisation/custom-logo-and-favicon) and [Avatars documentation](https://docs.chainlit.io/customisation/avatars).
+
 ## 🚀 Running the Applications
 
 ### Multi-Agent RAG (Recommended) 🤖
