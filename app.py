@@ -10,21 +10,21 @@ from uuid import uuid4
 import chainlit as cl
 import httpx
 import nest_asyncio
+from chainlit.input_widget import Select
 from dotenv import load_dotenv
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain_core.documents import Document
 from langchain_core.runnables import Runnable
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
-from chainlit.input_widget import Select
 
 from pstuts_rag.configuration import Configuration
 from pstuts_rag.datastore import Datastore
 from pstuts_rag.nodes import (
     FinalAnswer,
     TutorialState,
-    initialize,
     YesNoDecision,
+    initialize,
 )
 from pstuts_rag.utils import get_unique
 from version import __version__

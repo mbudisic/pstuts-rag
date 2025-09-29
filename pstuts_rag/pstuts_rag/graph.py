@@ -1,38 +1,29 @@
-from langchain.agents import AgentExecutor, create_openai_functions_agent
-from langchain.agents.agent import AgentExecutor
-from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
-from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_core.language_models import BaseChatModel
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import Runnable, RunnableLambda
-
-from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph, START, END
-
-from pstuts_rag.prompts import SUPERVISOR_SYSTEM, TAVILY_SYSTEM
-from pstuts_rag.state import PsTutsTeamState
-from pstuts_rag.datastore import Datastore
-from pstuts_rag.configuration import Configuration
-
 import asyncio
 import functools
 import logging
-from typing import Callable, Dict, Tuple, Optional, Union
+from typing import Callable, Dict, Optional
 
-from langchain_huggingface import HuggingFaceEmbeddings
-from pstuts_rag.utils import ChatAPISelector
+from langchain.agents import AgentExecutor, create_openai_functions_agent
+from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables import Runnable, RunnableLambda
+from langchain_openai import ChatOpenAI
+from langgraph.graph import END, StateGraph
 
 from app import (
     ADOBEHELP,
     VIDEOARCHIVE,
-    ApplicationState,
-    app_state,
     enter_chain,
 )
-
+from pstuts_rag.configuration import Configuration
+from pstuts_rag.datastore import Datastore
+from pstuts_rag.prompts import SUPERVISOR_SYSTEM, TAVILY_SYSTEM
 from pstuts_rag.rag_for_transcripts import create_transcript_rag_chain
+from pstuts_rag.state import PsTutsTeamState
+from pstuts_rag.utils import ChatAPISelector
 
 
 def search_agent(state: PsTutsTeamState, chain: Runnable) -> Dict:
