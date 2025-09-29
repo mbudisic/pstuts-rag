@@ -61,12 +61,12 @@ class TutorialState(MessagesState):
     """State management for tutorial team workflow orchestration."""
 
     next: str  # Routing variable for next node
-    query: str
-    video_references: Annotated[list[Document], operator.add]
-    url_references: Annotated[list[Dict], operator.add]
-    loop_count: int
-    search_permission: YesNoAsk
-    search_query: Annotated[list[str], operator.add]
+    query: str  # The current user query being processed
+    video_references: Annotated[list[Document], operator.add]  # List of referenced video documents, accumulated across steps
+    url_references: Annotated[list[Dict], operator.add]  # List of referenced URLs, accumulated across steps
+    loop_count: int  # Number of research loops completed
+    search_permission: YesNoAsk  # User's permission state for performing search operations
+    search_query: Annotated[list[str], operator.add]  # List of search queries generated, accumulated across steps
 
 
 # Define your FinalAnswer message type as a subclass of BaseMessage
