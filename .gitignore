@@ -9,3 +9,5 @@ __pycache__/
 notebooks/*/
 *.pckl
 qdrant/
+docs/AI_tinkerers.docx
+docs/AI_tinkerers.pdf
