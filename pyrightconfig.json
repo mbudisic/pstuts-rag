@@ -1,0 +1,33 @@
+{
+    "include": [
+        "app.py",
+        "pstuts_rag"
+    ],
+    "exclude": [
+        "**/__pycache__",
+        "**/.venv",
+        "**/node_modules",
+        "**/.git"
+    ],
+    "pythonVersion": "3.11",
+    "pythonPlatform": "Linux",
+    "executionEnvironments": [
+        {
+            "root": ".",
+            "pythonVersion": "3.11",
+            "pythonPlatform": "Linux",
+            "extraPaths": [
+                "./pstuts_rag"
+            ]
+        }
+    ],
+    "typeCheckingMode": "basic",
+    "useLibraryCodeForTypes": true,
+    "autoImportCompletions": true,
+    "autoSearchPaths": true
+}
+
+
+
+
+
