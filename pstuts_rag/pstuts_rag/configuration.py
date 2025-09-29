@@ -107,6 +107,8 @@ class Configuration(BaseSettings):
     )
 
     class Config:
+        """Config for Pydantic settings. Used internally by Pydantic."""
+
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"  # Allow extra env vars in .env/environment
@@ -135,7 +137,7 @@ class Configuration(BaseSettings):
         # Priority: environment variables > configurable dict values > field defaults
         values: dict[str, Any] = {
             name: os.environ.get(name.upper(), configurable.get(name))
-            for name in cls.__fields__
+            for name in cls.model_fields
         }
         logging.info("Configuration:\n%s", values)
         return cls(**{k: v for k, v in values.items() if v is not None})
@@ -150,7 +152,7 @@ class Configuration(BaseSettings):
             None
         """
         print_like_function("Configuration parameters:")
-        for name, field in self.__fields__.items():
+        for name, field in self.model_fields.items():
             value = getattr(self, name)
             print_like_function("  %s: %s", name, value)
 
@@ -161,7 +163,7 @@ class Configuration(BaseSettings):
             RunnableConfig: Properly formatted configuration for LangGraph
         """
         configurable_dict = {}
-        for name in self.__fields__:
+        for name in self.model_fields:
             value = getattr(self, name)
             if value:
                 configurable_dict[name] = value
