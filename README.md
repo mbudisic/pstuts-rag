@@ -1,10 +1,16 @@
-# 📼 Enhanced Video Archive Tool
+# 📼 EVA --- Enhanced Video Archive
 
-An **enhanced video archive tool** that provides intelligent search and retrieval capabilities for video content using advanced RAG (Retrieval-Augmented Generation) technology. 🎯
+An EVA provides intelligent search and retrieval capabilities for video content using RAG (Retrieval-Augmented Generation).
+EVA makes video content easily searchable and accessible. While the **[Adobe Photoshop video tutorial dataset](https://huggingface.co/datasets/mbudisic/PsTuts-VQA) is used as an example**, the tool is designed to work with any video transcript dataset. 📚
 
-## 🗂️ About This Tool
+## ⚠️ WORK IN PROGRESS ⚠️ 
 
-This is a **video archive enhancement system** designed to make video content easily searchable and accessible. While the **PsTuts dataset is used as an example**, the tool is designed to work with any video transcript dataset. 📚
+This is a work-in-progress project, developed by [👤 **Marko Budisic**](https://www.linkedin.com/in/marko-budisic/) during 
+[AI Makerspace](https://aimakerspace.io/) Cohort 6. 
+If you are interested in jump starting your own AI education,
+I cannot think of a better place than AI Makerspace.
+
+Here is the [video of the project demo](https://www.youtube.com/watch?v=q3e5oHQ4K5g) as presented in June 2025.
 
 ## ⚙️ Configuration via Environment Variables
 
@@ -23,15 +29,14 @@ The tool's behavior is controlled through **environment variables**, giving you 
 
 Here are **5 essential parts** of the codebase with direct links to the source:
 
-1. **[Multi-Agent System](https://github.com/mbudisic/pstuts-rag/blob/main/pstuts_rag/pstuts_rag/graph.py)** - Orchestrates AI agents for video search and web research
-2. **[RAG Implementation](https://github.com/mbudisic/pstuts-rag/blob/main/pstuts_rag/pstuts_rag/rag.py)** - Core retrieval-augmented generation logic
-3. **[Configuration Management](https://github.com/mbudisic/pstuts-rag/blob/main/pstuts_rag/pstuts_rag/configuration.py)** - Handles environment variables and settings
-4. **[Vector Database](https://github.com/mbudisic/pstuts-rag/blob/main/pstuts_rag/pstuts_rag/datastore.py)** - Manages Qdrant vector store and document processing
-5. **[Main Application](https://github.com/mbudisic/pstuts-rag/blob/main/app.py)** - Chainlit web interface and user interaction
+1. **[Multi-Agent System](https://github.com/mbudisic/pstuts-rag/blob/main/pstuts_rag/pstuts_rag/graph.py#L258)** - Orchestrates AI agents for video search and web research
+2. **[RAG Implementation](https://github.com/mbudisic/pstuts-rag/blob/main/pstuts_rag/pstuts_rag/rag.py#L231)** - Core retrieval-augmented generation logic
+3. **[Configuration](https://github.com/mbudisic/pstuts-rag/blob/main/env.example)** - APIs selectable via environment variables
+4. **[Context chunking](https://github.com/mbudisic/pstuts-rag/blob/main/pstuts_rag/pstuts_rag/datastore.py#L498)** - Timestamp-enriched document chunking
+5. **[Main Application](https://github.com/mbudisic/pstuts-rag/blob/main/app.py#L68)** - Chainlit web interface and user interaction
 
-## 👤 Author
 
-Developed by **[Marko Budisic](https://www.linkedin.com/in/marko-budisic/)** - Connect with me on LinkedIn! 🤝
+
 
 ## 🛠️ Installation Instructions
 
