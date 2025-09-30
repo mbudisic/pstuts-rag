@@ -1,10 +1,12 @@
-![EVA](public/logo_dark.png)
 
 # 📼 EVA 
 
 EVA, the Enhanced Video Archive, provides intelligent search and retrieval capabilities for video content using RAG (Retrieval-Augmented Generation), making video content easily searchable and accessible. While the [Adobe Photoshop video tutorial dataset (PsTuts)](https://huggingface.co/datasets/mbudisic/PsTuts-VQA) is used as an example, the tool is designed to work with any video transcript dataset. 📚
 
-![QR Code](public/QR_code.png)
+
+| ![EVA](public/logo_dark.png) | ![QR Code](public/QR_code.png) |
+| ------------- | ------------- |
+| EVA  | Link to here |
 
 ## ⚠️ WORK IN PROGRESS ⚠️ 
 
