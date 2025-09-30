@@ -1,7 +1,6 @@
-# 📼 EVA --- Enhanced Video Archive
+# 📼 EVA 
 
-An EVA provides intelligent search and retrieval capabilities for video content using RAG (Retrieval-Augmented Generation).
-EVA makes video content easily searchable and accessible. While the **[Adobe Photoshop video tutorial dataset](https://huggingface.co/datasets/mbudisic/PsTuts-VQA) is used as an example**, the tool is designed to work with any video transcript dataset. 📚
+EVA, the Enhanced Video Archive, provides intelligent search and retrieval capabilities for video content using RAG (Retrieval-Augmented Generation), making video content easily searchable and accessible. While the [Adobe Photoshop video tutorial dataset (PsTuts)](https://huggingface.co/datasets/mbudisic/PsTuts-VQA) is used as an example, the tool is designed to work with any video transcript dataset. 📚
 
 ## ⚠️ WORK IN PROGRESS ⚠️ 
 
@@ -11,6 +10,13 @@ If you are interested in jump starting your own AI education,
 I cannot think of a better place than AI Makerspace.
 
 Here is the [video of the project demo](https://www.youtube.com/watch?v=q3e5oHQ4K5g) as presented in June 2025.
+
+Features to be built:
+
+1. Automatic transcription of `.mp4` (currently relying on transcripts provided with PsTuts)
+2. OCR of the video to provide a second source of context.
+3. Search-by-screenshot
+
 
 ## ⚙️ Configuration via Environment Variables
 
