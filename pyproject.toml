@@ -10,7 +10,7 @@ dependencies = [
     "langchain-core>=0.3.59",
     "langchain-community>=0.3.23",
     "langchain-experimental>=0.3.4",
-    "langchain-openai",
+    "langchain-openai>=0.3.26",
     "langchain-qdrant>=0.2.0",
     "langgraph>=0.4.8",
     "qdrant-client>=1.8.0",

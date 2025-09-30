@@ -1,7 +1,7 @@
 import logging
 import re
 from typing import Any, Dict, Iterator, List, Type
-
+from functools import partial
 import requests
 from bs4 import BeautifulSoup
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEmbeddings
@@ -20,17 +20,6 @@ ChatAPISelector: Dict[
     ModelAPI.OPENAI: ChatOpenAI,
     ModelAPI.OLLAMA: ChatOllama,
 }
-
-
-def get_chat_api(input: str):
-
-    logging.info("LLM_API: %s", input)
-    cls = ChatAPISelector[ModelAPI(input)]
-    logging.info("LLM SELECTED: %s", cls)
-
-    return cls
-
-
 """
 ChatAPISelector: Dictionary mapping ModelAPI enum values to their corresponding chat model classes.
 
@@ -61,6 +50,51 @@ Example:
     >>> chat_class = ChatAPISelector[config.llm_api]
     >>> chat_model = chat_class(model="llama2:7b")
 """
+
+ChatReasoningSelector: Dict[ModelAPI, None | bool | Dict[str, str | None]] = {
+    ModelAPI.HUGGINGFACE: None,
+    ModelAPI.OPENAI: {
+        "effort": "low",  # 'low', 'medium', or 'high'
+        "summary": None,  # 'detailed', 'auto', or None
+    },
+    ModelAPI.OLLAMA: False,
+}
+
+
+def get_chat_api(input: str):
+    """
+    Selects and partially applies a chat model class based on the input API provider string.
+
+    Args:
+        input (str): The name of the API provider. Must match a value in the ModelAPI enum
+            (e.g., "HUGGINGFACE", "OPENAI", "OLLAMA").
+
+    Returns:
+        functools.partial: A partially-applied chat model class with reasoning configuration
+            set according to the provider.
+
+    Raises:
+        KeyError: If the input string does not correspond to a valid ModelAPI value.
+
+    Example:
+        >>> get_chat_api("OPENAI")
+        functools.partial(<class 'langchain_openai.ChatOpenAI'>, reasoning={'effort': 'low', 'summary': None})
+
+    References:
+        - ModelAPI Enum: https://github.com/your-org/pstuts_rag/blob/main/pstuts_rag/configuration.py
+        - LangChain Chat Models: https://python.langchain.com/docs/modules/model_io/chat/
+        - functools.partial: https://docs.python.org/3/library/functools.html#functools.partial
+    """
+
+    logging.info("LLM_API: %s", input)
+    cls = ChatAPISelector[ModelAPI(input)]
+    logging.info("LLM SELECTED: %s", cls)
+
+    cls_reasoned = partial(
+        cls, **{"reasoning": ChatReasoningSelector[ModelAPI(input)]}
+    )
+
+    return cls
 
 
 # Embeddings model selector dictionary
