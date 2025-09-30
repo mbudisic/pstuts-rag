@@ -4,6 +4,8 @@ EVA, the Enhanced Video Archive, provides intelligent search and retrieval capab
 
 ![QR Code](public/QR_code.png)
 
+![EVA](public/logo_dark.png)
+
 ## ⚠️ WORK IN PROGRESS ⚠️ 
 
 This is a work-in-progress project, developed by [👤 **Marko Budisic**](https://www.linkedin.com/in/marko-budisic/) during 
