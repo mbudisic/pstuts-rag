@@ -1,126 +1,56 @@
-# 🚀 5-Minute Technical Presentation: PsTuts RAG System
+# 🚀 5-Minute Technical Presentation: Enhanced Video Archive
 
-## **Slide 1: The Challenge & Solution (30 seconds)**
+## Setup:
 
-**"Building Production-Ready RAG for Video Tutorials"**
+- [github webpage](https://github.com/mbudisic/pstuts-rag)
+- close all tabs
+- 
 
-- **Problem**: How do you make AI systems that can answer questions about video content with precise timestamp references?
-- **Our Solution**: Multi-agent RAG system with semantic chunking, fine-tuned embeddings, and human-in-the-loop controls
-- **Demo**: Live chat interface answering Photoshop questions with video timestamps
+## Introduction
 
----
+My name is Marko Budisic, I work from Framatome in Lynchburg, VA, a couple of hours
+north of us here.
 
-## **Slide 2: Technical Architecture Highlights (90 seconds)**
+##  Short Description
 
-### **🧠 Multi-Agent Orchestration with LangGraph**
+I am presenting here a work-in-progress on EVA, Enhanced Video Archive.
+I worked on this as a part of my own learning about AI, through AI Makerspace - an excellent AI bootcamp program.
 
-```python
-# Sophisticated agent coordination
-ai_graph.add_node(VIDEOARCHIVE, rag_node)      # Video search agent
-ai_graph.add_node(ADOBEHELP, adobe_help_node)  # Web search agent  
-ai_graph.add_node("supervisor", supervisor_agent)  # LLM router
-```
+**So what's the use case we are tackling here?**
 
-### **⚡ Human-in-the-Loop Interrupts**
+Many larger companies have recordings of internal training,
+demos of their work processes, that they want to make usable for learning without 
+users needing to watch hours of video.
+EVA is intended to allow **knowledge extraction** from a library of non-annotated
+videos, MP4s.
 
-- **Interactive Permission System**: Users control web search access in real-time
-- **Graceful Fallbacks**: System continues with local RAG if web search denied
-- **State Persistence**: Permission decisions maintained throughout session
+In my case, I am using a pre-made database of Adobe Photoshop training videos, 
+as a stand-in for such a library.
 
-### **🎯 Semantic Chunking with Timestamp Preservation**
+## Demo
 
-- **"Kamradt Chunks"**: Semantic coherence over fixed-size splits
-- **Timestamp Linking**: Every chunk preserves video timing metadata
-- **Context Quality**: Complete thoughts vs. fragmented text
+Let me give you a short demo.
 
----
+## Under the hood
 
-## **Slide 3: Advanced RAG Techniques (90 seconds)**
+I built the app using LangGraph which allows us to show 
+the AI workflow that the tool uses.
 
-### **🔬 Fine-Tuned Embeddings for Domain Specificity**
+There are a few technical tricks that I made sure to build in:
 
-```python
-# Custom fine-tuned model for Photoshop tutorials
-embedding_model = "mbudisic/snowflake-arctic-embed-s-ft-pstuts"
-# vs base model: "Snowflake/snowflake-arctic-embed-s"
-```
+- when using video transcripts as RAG context, exact timestamps are propagated 
+  as metadata, so that the final response can link to the relevant time in a video,
+  which is very useful for long video reviews
+- since this is supposed to be an in-house tool, I made sure that all AI API calls
+  can be rerouted to a local Ollama server, meaning that no information exits a 
+  security-minded company
+- additional guardrails: initial screening node, permissions before initiating web search
 
-### **📊 Comprehensive Evaluation Framework**
+## Closing
 
-- **RAGAS Integration**: Systematic evaluation of retrieval and generation
-- **Synthetic Dataset**: Generated test cases for consistent benchmarking
-- **A/B Testing**: Base vs fine-tuned embedding performance comparison
+Like I said, this is a work in progress. On the github page you can 
+see that the next features I am going to build deal with multimodal search,
+that is searching by screenshot, and by adding automated text extraction by
+transcription and OCR, so I can stop relying on pre-transcripted videos.
 
-### **🛠️ Production-Ready Infrastructure**
-
-- **Async Loading**: Non-blocking vector database initialization
-- **Event-Driven Architecture**: Callback system for loading completion
-- **Thread-Safe Singleton**: QdrantClient with proper concurrency handling
-
----
-
-## **Slide 4: Real-World Implementation Details (90 seconds)**
-
-### **🎨 Custom UI with Sepia Theme**
-
-- **Chainlit Integration**: Beautiful, responsive chat interface
-- **Video Previews**: Direct links to tutorial timestamps
-- **Screenshot Generation**: Microlink API for web reference previews
-
-### **⚙️ Robust Configuration Management**
-
-```python
-# Environment-driven configuration
-class Configuration(BaseSettings):
-    search_permission: YesNoAsk = YesNoAsk.NO
-    embedding_model: str = "mbudisic/snowflake-arctic-embed-s-ft-pstuts"
-    max_research_loops: int = 3
-```
-
-### **🔄 Lazy Graph Initialization**
-
-- **LangGraph Studio Compatibility**: Factory pattern for graph compilation
-- **Memory Efficiency**: Resources allocated only when needed
-- **Fast Imports**: No expensive compilation during module loading
-
----
-
-## **Slide 5: Key Technical Innovations & Takeaways (30 seconds)**
-
-### **🚀 What Makes This Interesting for AI Engineers:**
-
-1. **Production Patterns**: Real-world async/await, error handling, and state management
-2. **Evaluation Rigor**: Systematic RAG evaluation with RAGAS framework
-3. **Domain Adaptation**: Fine-tuned embeddings for specialized content
-4. **Human-AI Collaboration**: Interactive permission systems for controlled autonomy
-5. **Semantic Understanding**: Beyond keyword matching to meaning-based retrieval
-
-### **🎯 Key Takeaways:**
-
-- **Semantic chunking** beats fixed-size splits for instructional content
-- **Fine-tuning embeddings** on domain data provides measurable improvements
-- **Human-in-the-loop** controls enable production deployment of autonomous systems
-- **Comprehensive evaluation** is essential for RAG system confidence
-
----
-
-## **Demo Script (30 seconds)**
-
-*"Let me show you the system in action..."*
-
-1. **Ask**: "How do I use layer masks in Photoshop?"
-2. **Show**: Multi-agent routing (supervisor → video search → web search)
-3. **Highlight**: Timestamp links to specific video segments
-4. **Demonstrate**: Permission system for web search control
-
----
-
-## **Technical Deep-Dive Points for Q&A:**
-
-- **Vector Database**: Qdrant with semantic chunking and metadata preservation
-- **LLM Integration**: OpenAI GPT-4.1-mini with function calling for agent coordination  
-- **Evaluation Metrics**: RAGAS framework for retrieval accuracy and generation quality
-- **Scalability**: Async loading, background processing, and memory-efficient design
-- **Extensibility**: Modular agent system ready for additional capabilities (OCR, presentation generation)
-
-This presentation emphasizes the **production-ready patterns**, **evaluation rigor**, and **innovative technical approaches** that would be most valuable to AI engineers building similar systems.
+Thank you very much and I'd love to chat more today or later, via LinkedIn.
